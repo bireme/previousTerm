@@ -1,0 +1,34 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<web-app version="3.0" xmlns="http://java.sun.com/xml/ns/javaee" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://java.sun.com/xml/ns/javaee http://java.sun.com/xml/ns/javaee/web-app_3_0.xsd">
+    <servlet>
+        <servlet-name>PreviousTermServlet</servlet-name>
+        <servlet-class>br.bireme.prvtrm.PreviousTermServlet</servlet-class>
+        <init-param>
+            <description>Lucene index directory</description>
+            <param-name>INDEX_DIR</param-name>
+            <param-value>/home/heitor/workspace/Lucene/LILACS</param-value>
+        </init-param>
+        <init-param>
+            <description>maximum number of terms to be returned</description>
+            <param-name>MAX_TERMS</param-name>
+            <param-value>10</param-value>
+        </init-param>
+        <init-param>
+            <description>Name of document fields of the terms to be retrieved</description>
+            <param-name>DOC_FIELDS</param-name>
+            <param-value>tit,abs</param-value>
+        </init-param>
+    </servlet>
+    <servlet-mapping>
+        <servlet-name>PreviousTermServlet</servlet-name>
+        <url-pattern>/PreviousTermServlet</url-pattern>
+    </servlet-mapping>
+    <session-config>
+        <session-timeout>
+            30
+        </session-timeout>
+    </session-config>
+    <welcome-file-list>
+        <welcome-file>index.jsp</welcome-file>
+    </welcome-file-list>
+</web-app>
