@@ -46,6 +46,14 @@ public class PreviousTermServlet extends HttpServlet {
 
     private PreviousTerm previous;
 
+    /**
+     * INDEX_DIR diretorio contendo o indice Lucene
+     * MAX_TERMS numero maximo de termos a serem retornados
+     * DOC_FIELDS nomes dos campos cujos termos serao retornados 
+     * (separados por ',' ';' ou '-' )
+     * @param servletConfig
+     * @throws ServletException 
+     */
     @Override
     public void init(final ServletConfig servletConfig)
                                                        throws ServletException {
@@ -88,33 +96,48 @@ public class PreviousTermServlet extends HttpServlet {
                                    HttpServletResponse response)
             throws ServletException, IOException {
         response.setContentType("application/json; charset=UTF-8");
-        PrintWriter out = response.getWriter();
+        final PrintWriter out = response.getWriter();
 
         try {
             final String init = request.getParameter("init");
             if (init == null) {
                 throw new ServletException("missing 'init' parameter");
             }
+                                    
+            int maxSize = previous.getMaxSize();
+            String maxTerms = request.getParameter("maxTerms");
+            if (maxTerms != null) {
+                maxSize = Integer.parseInt(maxTerms);
+            }
+            
+            List<String> fields = previous.getFields();
+            String fldsParam = request.getParameter("fields");
+            if (fldsParam != null) {
+                fields = Arrays.asList(fldsParam.split("[,;\\-]"));
+            }
 
             final List<String> terms;
             String direction = request.getParameter("direction");
-
             if ((direction == null) ||
                 (direction.compareToIgnoreCase("next") == 0)) {
-                terms = previous.getNextTerms(init);
+                terms = previous.getNextTerms(init, fields, maxSize);
                 direction = "next";
             } else {
-                terms = previous.getPreviousTerms(init);
+                terms = previous.getPreviousTerms(init, fields, maxSize);
                 direction = "previous";
             }
 
             final JSONObject jobj = new JSONObject();
-            final JSONArray jlist = new JSONArray();
+            final JSONArray jlistTerms = new JSONArray();
+            final JSONArray jlistFields = new JSONArray();
 
-            jlist.addAll(terms);
+            jlistTerms.addAll(terms);
+            jlistFields.addAll(fields);
             jobj.put("init", init);
             jobj.put("direction", direction);
-            jobj.put("terms", jlist);
+            jobj.put("maxTerms", maxSize);
+            jobj.put("fields", jlistFields);
+            jobj.put("terms", jlistTerms);
 
             out.println(jobj.toJSONString());
         } finally {
@@ -162,7 +185,7 @@ public class PreviousTermServlet extends HttpServlet {
      */
     @Override
     public String getServletInfo() {
-        return "Retrieves n next/previous terms starting from a term in a "
+        return "Retrieves n next/previous terms starting from a term from a "
                 +  "Lucene index";
     }// </editor-fold>
 }

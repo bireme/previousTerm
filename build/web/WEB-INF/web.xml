@@ -6,7 +6,7 @@
         <init-param>
             <description>Lucene index directory</description>
             <param-name>INDEX_DIR</param-name>
-            <param-value>/home/heitor/workspace/Lucene/LILACS</param-value>
+            <param-value>/home/heitor/Projetos/DocumentSimilarity/lil</param-value>
         </init-param>
         <init-param>
             <description>maximum number of terms to be returned</description>

@@ -14,8 +14,8 @@
     <body>
         <h1>Previous Term Servlet</h1>
         
-        <p>Retrives n (next/previous) terms of a Lucene Index starting from a
+        <p>Retrives n (next/previous) terms from a Lucene Index starting from a
         specif term.</p>
-        <p>Get parameters are: init=&lt;initial key&gt; direction=&lt;'next' or 'previous'&gt;</p>
+        <p>Get parameters are: init=&lt;initial key&gt; direction=&lt;'next' or 'previous'&gt; [maxTerms=&lt;max returned keys&gt;] [fields=&lt;source document field list&gt;]</p>
     </body>
 </html>

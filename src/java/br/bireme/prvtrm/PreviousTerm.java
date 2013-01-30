@@ -24,6 +24,7 @@ package br.bireme.prvtrm;
 import java.io.File;
 import java.io.IOException;
 import java.util.ArrayList;
+import java.util.LinkedList;
 import java.util.List;
 import org.apache.lucene.index.IndexReader;
 import org.apache.lucene.index.Term;
@@ -41,17 +42,44 @@ import org.apache.lucene.store.SimpleFSDirectory;
 public class PreviousTerm {
     class Tum {
         TermEnum tenum;
+        String field;
         String cur;
 
-        public Tum(TermEnum tenum) {
+        Tum(final TermEnum tenum,
+            final String field) {
             this.tenum = tenum;
+            this.field = field;
             cur = null;
+        }
+    }
+    
+    public class TermElem {        
+        private String term;
+        private int tot;
+        
+        public TermElem(String term) {
+            this.term = term;
+            tot = 0;
+        }
+        public String getTerm() {
+            return term;
+        }
+        public int getTotal() {
+            return tot;
         }
     }
 
     private final IndexReader reader;
     private final List<String> fields;
     private final int maxSize;
+
+    public List<String> getFields() {
+        return fields;
+    }
+
+    public int getMaxSize() {
+        return maxSize;
+    }
 
     /**
      * Construtor da classe
@@ -90,16 +118,218 @@ public class PreviousTerm {
     }
 
     /**
-     *
-     * @param init temos inicial em relacao ao qual os termos previos serao encontrados
+     * Encontra os termos previos de um indice em relacao ao termo inicial
+     * @param init termo inicial em relacao ao qual os termos previos serao encontrados
      * @return lista de termos previos em relacao ao termo inicial
      * @throws IOException
      */
     public List<String> getPreviousTerms(final String init)
                                                             throws IOException {
+        if ((init == null) || init.isEmpty()) {
+            throw new IOException("invalid init");
+        }
         return getPreviousTerms(init, fields, maxSize);
     }
 
+    /**
+     * Encontra os termos previos de um indice em relacao ao termo inicial
+     * @param init termo inicial em relacao ao qual os termos previos serao encontrados
+     * @param fields indica a quais campos os termos devem pertencer
+     * @param maxSize tamanho maximo da lista de termos a ser retornada
+     * @return lista de termos previos em relacao ao termo inicial
+     * @throws IOException
+     */
+    public List<String> getPreviousTerms(final String init,
+                                           final List<String> fields,
+                                           final int maxSize)
+                                                            throws IOException {
+        if ((init == null) || init.isEmpty()) {
+            throw new IOException("invalid init");
+        }
+        if ((fields == null) || fields.isEmpty()) {
+            throw new IOException("invalid fields");
+        }
+        if (maxSize <= 0) {
+            throw new IOException("invalid maxSize");
+        }
+
+        final LinkedList<String> ret = new LinkedList<String>();
+        String initX = init;
+        
+        for (int tot = 0; tot < maxSize; tot++) {
+            final String prev = getPreviousTerm(initX, fields);
+            
+            if (prev == null) {
+                break;
+            }
+            ret.add(prev);
+            initX = prev;
+        }
+
+        return ret;
+    }
+    
+    /**
+     * Encontra o termo previo em relacao ao termo inicial
+     * @param init termo inicial em relacao ao qual o termo previo sera encontrado
+     * @param fields indica a quais campos os termo deve pertencer
+     * @return o termo previo em relacao ao termo inicial
+     * @throws IOException 
+     */
+    private String getPreviousTerm(final String init,
+                                     final List<String> fields)
+                                                            throws IOException {
+        assert fields != null;
+        assert (init != null) && (!init.isEmpty());
+
+        final int RANGE = 10;
+        final int MAXTOTFIRSTPOS = 210;
+        
+        String initX = init;
+        String lowerBound = null;
+        String ret;
+        int totFirstPos = 0;
+        
+        while (true) {
+            final String previousWord = guessPreviousWord(initX, lowerBound);
+            if (previousWord == null) {
+                ret = null;
+                break;
+            }
+            List<String> nextWords;
+            int idx = -1;
+            
+            nextWords = getNextTerms(previousWord, fields, RANGE);        
+            if (nextWords.isEmpty()) {
+                ret = null;
+                break;
+            }                      
+            final String last = nextWords.get(nextWords.size() - 1); 
+            if (last.compareTo(initX) < 0) {            // init esta em um bloco adiante
+                //initX = init;
+                lowerBound = last;
+                continue;
+            }                
+            for (String word : nextWords) {             // init esta no bloco corrente
+                if (word.compareTo(init) >= 0) {
+                    break;
+                }
+                idx++;
+            }
+            if (idx == -1) {                            // init esta na primeira posicao
+                if (totFirstPos++ > MAXTOTFIRSTPOS) {
+                    ret = lowerBound;
+                    break;
+                }
+                //lowerBound = null;
+                initX = previousWord;
+                continue;
+            } else {
+                ret = nextWords.get(idx);               // achou termo previo
+                break;
+            }
+        }
+        return ret;
+    }
+        
+    //==========================================================================
+    
+    /**
+     * Gera uma string que estaria a uma distância média entre as strings
+     * 'current' e 'lastGuess'.
+     * @param current
+     * @param lastGuess
+     * @return uma string anterior menor que a 'current' mas maior que 'lastGuess'
+     */
+    private String guessPreviousWord(final String current,
+                                       final String lastGuess) {
+        assert current != null;
+        assert (lastGuess == null) ? true : (current.compareTo(lastGuess) > 0) 
+                                                    : current + ">" + lastGuess;
+        
+        final String ret;
+        final int clen = current.length();       
+
+        if (lastGuess == null) {
+            if (clen == 1) {
+                final char first = current.charAt(0);
+                final char med = (char)(first/2);                
+                ret = "" + ((first == med) 
+                                  ? first + (char)(Character.MAX_VALUE / 2)
+                                  : med);
+            } else {
+                //ret = current.substring(0, clen/2);
+                ret = current.substring(0, clen - 1);
+            }
+        } else {            
+            final StringBuilder builder = new StringBuilder();
+            final int llen = lastGuess.length();
+            final int max = Math.max(clen, llen);
+            boolean addLetter = false;
+            
+            for (int idx = 0; idx < max; idx++) {
+                if (idx < clen) {
+                    final char cch = current.charAt(idx);
+                    if (idx < llen) {
+                        final char lch = lastGuess.charAt(idx);
+                        if (addLetter) {
+                            final char med = 
+                                       (char) ((Character.MAX_VALUE - lch) / 2);
+                            if (med > 0) {
+                                builder.append((char)(lch + med));
+                                addLetter = false;
+                                break;
+                            }
+                        } else if (cch == lch) {
+                            builder.append(cch);
+                        } else {
+                            final char med = (char)((lch + cch) / 2);
+                            if (med == lch) {
+                                builder.append(lch);
+                                addLetter = true;                                
+                            } else {
+                                builder.append(med);
+                                addLetter = false;
+                                break;
+                            }
+                        }
+                    } else {
+                        final char med = (char)(cch / 2);
+                        if (med > 0) {
+                            builder.append(med);
+                            addLetter = false;
+                            break;
+                        } else {
+                            builder.append(cch);
+                            addLetter = true;
+                        }
+                    }
+                } else {
+                    final char lch = lastGuess.charAt(idx);
+                    final char med = (char) ((Character.MAX_VALUE - lch) / 2);
+                    
+                    if (med > 0) {
+                        builder.append((char)(lch + med));
+                        addLetter = false;
+                        break;
+                    } else {
+                        builder.append(lch);
+                        addLetter = true;
+                    }
+                }                
+            }
+            if (addLetter) {
+                final char med = (char)(Character.MAX_VALUE / 2);
+                builder.append(med);
+            }
+            
+            ret = builder.toString();
+        }
+        return ret;
+    }
+    
+    //==========================================================================
+    
     /**
      *  Retorna os proximos 'maxSize' termos do indice a partir de 'init'
      * @param init termo inicial a partir do qual os outros serao retornados.
@@ -109,44 +339,7 @@ public class PreviousTerm {
     public List<String> getNextTerms(final String init) throws IOException {
         return getNextTerms(init, fields, maxSize);
     }
-
-    /**
-     *
-     * @param init temos inicial em relacao ao qual os termos previos serao encontrados
-     * @param fields indica a quais campos os termos devem pertencer
-     * @param maxSize tamanho maximo da lista de termos a ser retornada
-     * @return lista de termos previos em relacao ao termo inicial
-     * @throws IOException
-     */
-    private List<String> getPreviousTerms(final String init,
-                                            final List<String> fields,
-                                            final int maxSize)
-                                                            throws IOException {
-        assert fields != null;
-        assert maxSize > 0;
-
-        final String init0 = (init == null) ? "" : init;
-        List<String> ret = null;
-        String initX = init;
-
-        while (ret == null) {
-            final String previousWord = guessPreviousWord(initX, null);
-            if (previousWord.isEmpty()) {
-                ret = new ArrayList<String>();
-            } else {
-                final List<String> lst =
-                                getNextTerms(previousWord, fields, maxSize + 1);
-                if (lst.get(0).equals(init0)) {
-                    initX = previousWord;
-                } else {
-                    ret = getPreviousTermsRange(lst, init0, fields, maxSize);
-                }
-            }
-        }
-
-        return ret;
-    }
-
+    
     /**
      *  Retorna os proximos 'maxSize' termos do indice a partir de 'init'
      * @param init termo inicial a partir do qual os outros serao retornados.
@@ -155,22 +348,29 @@ public class PreviousTerm {
      * @param maxSize tamanho maximo da lista de termos a ser retornada
      * @return lista ordenada de termos que são os próximos termos a partir de 'init'
      */
-    private List<String> getNextTerms(final String init,
+    public List<String> getNextTerms(final String init,
                                        final List<String> fields,
                                        final int maxSize) throws IOException {
-        assert fields != null;
-        assert maxSize > 0;
+        if ((init == null) || init.isEmpty()) {
+            throw new IOException("invalid init");
+        }
+        if ((fields == null) || fields.isEmpty()) {
+            throw new IOException("invalid fields");
+        }
+        if (maxSize <= 0) {
+            throw new IOException("invalid maxSize");
+        }
 
         final List<String> ret = new ArrayList<String>();
         final String init0 = (init == null) ? "" : init;
         final List<Tum> lte = new ArrayList<Tum>();
 
         for (String field : fields) {
-            lte.add(new Tum(reader.terms(new Term(field, init0))));
+            lte.add(new Tum(reader.terms(new Term(field, init0)), field));
         }
 
         int idx = 0;
-        String lastTerm = "";
+        String lastTerm = init0;
 
         while (idx++ < maxSize) {
             lastTerm = getNextTerm(lte, lastTerm);
@@ -188,131 +388,39 @@ public class PreviousTerm {
     }
 
     /**
-     * Dada uma lista de TermEnum retorna o proximo termo a partit de 'lastTerm'
+     * Dada uma lista de TermEnum retorna o proximo termo a partir de 'lastTerm'
      * @param ltum lista de TermEnum, uma para cada campo indexado a ter termos recuperados
      * @param lastTerm termo a partir do qual serao recuperados os proximos
      * @return string contendo o proximo termo
      * @throws IOException
      */
     private String getNextTerm(final List<Tum> ltum,
-                                final String lastTerm) throws IOException {
+                               final String lastTerm) throws IOException {
         assert ltum != null;
 
         String min = null;
 
         for (Tum tum : ltum) {
-            if ((tum.cur == null) || (tum.cur.compareTo(lastTerm) <= 0)) {
+            if (tum.cur == null) {
+                tum.cur = tum.tenum.term().text();
+            }
+        }
+        for (Tum tum : ltum) {
+            while (tum.cur.compareTo(lastTerm) <= 0) {
                 if (tum.tenum.next()) {
                     tum.cur = tum.tenum.term().text();
+                } else {
+                    tum.cur = null;
+                    break;
                 }
             }
-            if ((min == null) || (tum.cur.compareTo(min) < 0)) {
+            if ((min == null) || 
+                          ((tum.cur != null) && (tum.cur.compareTo(min) < 0))) {
                 min = tum.cur;
             }
         }
 
         return (lastTerm.equals(min)) ? null : min;
-    }
-
-    /**
-     *
-     * @param lstTerms lista de termos canditatos a termos previos
-     * @param init temos inicial em relacao ao qual os termos previos serao encontrados
-     * @param lstField indica quais campos os termos previos pretencem
-     * @param maxSize numero de termos previos a serem retornados
-     * @return lista de termos previos em relacao ao termo inicial
-     * @throws IOException
-     */
-    private List<String> getPreviousTermsRange(final List<String> lstTerms,
-                                                 final String init,
-                                                 final List<String> lstField,
-                                                 final int maxSize)
-                                                            throws IOException {
-        assert lstTerms != null;
-        assert lstTerms.size() > 0;
-        assert init != null;
-        assert maxSize > 0;
-
-        final List<String> ret;
-        final String last = lstTerms.get(lstTerms.size() - 1);
-        final int compare = init.compareTo(last);
-
-        if (compare < 0) { // Temos inicial está no meio dos termos encontrados
-            final List<String> lst =
-                                lstTerms.subList(0, lstTerms.indexOf(init));
-            final int size = lst.size();
-            if (size < maxSize) {
-                final List<String> prev =
-                         getPreviousTerms(lst.get(0), lstField, maxSize - size);
-                prev.addAll(lst);
-                ret = prev;
-            } else {
-                ret = lst.subList(size - maxSize, size);
-            }
-        } else if (compare == 0) { // Achou os n termos previos
-            final int size = lstTerms.size();
-            ret = (size <= maxSize) ? lstTerms
-                                    : lstTerms.subList(size - maxSize, size);
-        } else {  // Existem outros termos entre os candidatos e o inicial
-            lstTerms.addAll(
-                           getNextTerms(last, lstField, Math.max(10, maxSize)));
-            ret = getPreviousTermsRange(lstTerms, init, lstField, maxSize);
-        }
-
-        return ret;
-    }
-
-    /**
-     * Retorna o prefixo comum a duas strings
-     * @param word1 string 1
-     * @param word2 string 2
-     * @return o prefixo comum a duas strings
-     */
-    private String getCommonPrefix(final String word1,
-                                     final String word2) {
-        assert word1 != null;
-        assert word2 != null;
-
-        final int len = Math.min(word1.length(), word2.length());
-        int common = 0;
-
-        for (int idx = 0; idx < len; idx++) {
-            if (word1.charAt(idx) == word2.charAt(idx)) {
-                common++;
-            } else {
-                break;
-            }
-        }
-
-        return word1.substring(0, common);
-    }
-
-    /**
-     * Gera uma string que estaria a uma distância média entre as strings
-     * 'current' e 'lastGuess'.
-     * @param current
-     * @param lastGuess
-     * @return uma string anterior menor que a 'current' mas maior que 'lastGuess'
-     */
-    private String guessPreviousWord(final String current,
-                                       final String lastGuess) {
-        assert current != null;
-        assert (lastGuess == null) ? true : (current.compareTo(lastGuess) > 0);
-
-        final String ret;
-        final int clen = current.length();
-
-        if (lastGuess == null) {
-            if (clen == 1) {
-                final char med = (char)(current.charAt(0)/2);
-                ret = new String(new char[] {med});
-            } else {
-                ret = current.substring(0, clen/2);
-            }
-        } else {
-            ret = getCommonPrefix(current, lastGuess);
-        }
-
-        return ret;
-    }
+    }    
 }
+
