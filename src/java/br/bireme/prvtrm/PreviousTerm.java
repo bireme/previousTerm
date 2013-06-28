@@ -42,13 +42,10 @@ import org.apache.lucene.store.SimpleFSDirectory;
 public class PreviousTerm {
     class Tum {
         TermEnum tenum;
-        String field;
         String cur;
 
-        Tum(final TermEnum tenum,
-            final String field) {
+        Tum(final TermEnum tenum) {
             this.tenum = tenum;
-            this.field = field;
             cur = null;
         }
     }
@@ -123,8 +120,7 @@ public class PreviousTerm {
      * @return lista de termos previos em relacao ao termo inicial
      * @throws IOException
      */
-    public List<String> getPreviousTerms(final String init)
-                                                            throws IOException {
+    public List<String> getPreviousTerms(final String init) throws IOException {
         if ((init == null) || init.isEmpty()) {
             throw new IOException("invalid init");
         }
@@ -140,9 +136,8 @@ public class PreviousTerm {
      * @throws IOException
      */
     public List<String> getPreviousTerms(final String init,
-                                           final List<String> fields,
-                                           final int maxSize)
-                                                            throws IOException {
+                                         final List<String> fields,
+                                         final int maxSize) throws IOException {
         if ((init == null) || init.isEmpty()) {
             throw new IOException("invalid init");
         }
@@ -154,9 +149,22 @@ public class PreviousTerm {
         }
 
         final LinkedList<String> ret = new LinkedList<String>();
+        final List<Tum> lte = new ArrayList<Tum>();
+        int mSize = maxSize;
         String initX = init;
         
-        for (int tot = 0; tot < maxSize; tot++) {
+        for (String field : fields) {
+            lte.add(new Tum(reader.terms(new Term(field, initX))));
+        }
+        if (isATerm(lte, initX)) {
+            ret.add(initX);
+            mSize--;
+        }
+        for (Tum tum : lte) {
+            tum.tenum.close();
+        }
+        
+        for (int tot = 0; tot < mSize; tot++) {
             final String prev = getPreviousTerm(initX, fields);
             
             if (prev == null) {
@@ -177,7 +185,7 @@ public class PreviousTerm {
      * @throws IOException 
      */
     private String getPreviousTerm(final String init,
-                                     final List<String> fields)
+                                   final List<String> fields)
                                                             throws IOException {
         assert fields != null;
         assert (init != null) && (!init.isEmpty());
@@ -205,18 +213,18 @@ public class PreviousTerm {
                 break;
             }                      
             final String last = nextWords.get(nextWords.size() - 1); 
-            if (last.compareTo(initX) < 0) {            // init esta em um bloco adiante
+            if (last.compareTo(initX) < 0) {    // init esta em um bloco adiante
                 //initX = init;
                 lowerBound = last;
                 continue;
             }                
-            for (String word : nextWords) {             // init esta no bloco corrente
+            for (String word : nextWords) {     // init esta no bloco corrente
                 if (word.compareTo(init) >= 0) {
                     break;
                 }
                 idx++;
             }
-            if (idx == -1) {                            // init esta na primeira posicao
+            if (idx == -1) {                    // init esta na primeira posicao
                 if (totFirstPos++ > MAXTOTFIRSTPOS) {
                     ret = lowerBound;
                     break;
@@ -242,7 +250,7 @@ public class PreviousTerm {
      * @return uma string anterior menor que a 'current' mas maior que 'lastGuess'
      */
     private String guessPreviousWord(final String current,
-                                       final String lastGuess) {
+                                     final String lastGuess) {
         assert current != null;
         assert (lastGuess == null) ? true : (current.compareTo(lastGuess) > 0) 
                                                     : current + ">" + lastGuess;
@@ -349,8 +357,8 @@ public class PreviousTerm {
      * @return lista ordenada de termos que são os próximos termos a partir de 'init'
      */
     public List<String> getNextTerms(final String init,
-                                       final List<String> fields,
-                                       final int maxSize) throws IOException {
+                                     final List<String> fields,
+                                     final int maxSize) throws IOException {
         if ((init == null) || init.isEmpty()) {
             throw new IOException("invalid init");
         }
@@ -362,16 +370,20 @@ public class PreviousTerm {
         }
 
         final List<String> ret = new ArrayList<String>();
-        final String init0 = (init == null) ? "" : init;
         final List<Tum> lte = new ArrayList<Tum>();
 
         for (String field : fields) {
-            lte.add(new Tum(reader.terms(new Term(field, init0)), field));
+            lte.add(new Tum(reader.terms(new Term(field, init))));
         }
 
         int idx = 0;
-        String lastTerm = init0;
+        String lastTerm = init;
 
+        if (isATerm(lte, lastTerm)) {
+            ret.add(lastTerm);
+            idx++;
+        }
+        
         while (idx++ < maxSize) {
             lastTerm = getNextTerm(lte, lastTerm);
             if (lastTerm == null) {
@@ -397,6 +409,7 @@ public class PreviousTerm {
     private String getNextTerm(final List<Tum> ltum,
                                final String lastTerm) throws IOException {
         assert ltum != null;
+        assert lastTerm != null;
 
         String min = null;
 
@@ -421,6 +434,43 @@ public class PreviousTerm {
         }
 
         return (lastTerm.equals(min)) ? null : min;
+    }
+    
+    /**
+     * Checa se uma determinada palavra (term) e' um termo presente no indice
+     * @param ltum lista de TermEnum, uma para cada campo indexado a ter termos recuperados
+     * @param term termo a ser checado se e' termo ou nao
+     * @return true se term e' termo e false caso contrario
+     * @throws IOException 
+     */
+    private boolean isATerm(final List<Tum> ltum,
+                            final String term) throws IOException {
+        assert ltum != null;
+        assert term != null;
+        
+        boolean ret = false;
+        
+        for (Tum tum : ltum) {
+            if (tum.cur == null) {
+                tum.cur = tum.tenum.term().text();
+            }
+        }
+        for (Tum tum : ltum) {
+            while (tum.cur.compareTo(term) < 0) {
+                if (tum.tenum.next()) {
+                    tum.cur = tum.tenum.term().text();
+                } else {
+                    tum.cur = null;
+                    break;
+                }
+            }
+            if (term.equals(tum.cur)) {
+                ret = true;
+                break;
+            }
+        }
+        
+        return ret;
     }    
 }
 

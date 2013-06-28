@@ -2,7 +2,6 @@ package br.bireme.prvtrm;
 
 import java.io.File;
 import java.io.IOException;
-import java.sql.Time;
 import java.util.Arrays;
 import java.util.GregorianCalendar;
 import java.util.List;
@@ -21,10 +20,10 @@ public class Test {
         List<String> prevs;
         
         String start = "cadit"; //"cabíveis";//"cac"; //"cacinoma";
-        System.out.println("*** \n" + start);
+        System.out.println("*** " + start);
         final List<String> next = prev.getNextTerms(start);
         for (String elem : next) {
-            //System.out.println(elem);
+            System.out.println(elem);
         }
         
         System.out.println("==================================================");       
@@ -40,7 +39,7 @@ long endTime = (new GregorianCalendar()).getTimeInMillis();
         for (String elem : prevs) {
             System.out.println(elem);
         }
-        System.out.println(startp);
+        System.out.println("==>" + startp);
         prev.close();
         
         /*
