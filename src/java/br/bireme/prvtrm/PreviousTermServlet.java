@@ -40,7 +40,7 @@ import org.json.simple.JSONObject;
  * @author Heitor Barbieri
  * 20121129
  */
-@WebServlet(name = "PreviousTermServlet", urlPatterns = 
+@WebServlet(name = "PreviousTermServlet", urlPatterns =
                                                        {"/PreviousTermServlet"})
 public class PreviousTermServlet extends HttpServlet {
 
@@ -49,10 +49,10 @@ public class PreviousTermServlet extends HttpServlet {
     /**
      * INDEX_DIR diretorio contendo o indice Lucene
      * MAX_TERMS numero maximo de termos a serem retornados
-     * DOC_FIELDS nomes dos campos cujos termos serao retornados 
+     * DOC_FIELDS nomes dos campos cujos termos serao retornados
      * (separados por ',' ';' ou '-' )
      * @param servletConfig
-     * @throws ServletException 
+     * @throws ServletException
      */
     @Override
     public void init(final ServletConfig servletConfig)
@@ -92,9 +92,9 @@ public class PreviousTermServlet extends HttpServlet {
      * @throws ServletException if a servlet-specific error occurs
      * @throws IOException if an I/O error occurs
      */
-    protected void processRequest(HttpServletRequest request, 
-                                   HttpServletResponse response)
-            throws ServletException, IOException {
+    protected void processRequest(HttpServletRequest request,
+                                  HttpServletResponse response)
+                                          throws ServletException, IOException {
         response.setContentType("application/json; charset=UTF-8");
         final PrintWriter out = response.getWriter();
 
@@ -103,13 +103,13 @@ public class PreviousTermServlet extends HttpServlet {
             if (init == null) {
                 throw new ServletException("missing 'init' parameter");
             }
-                                    
+
             int maxSize = previous.getMaxSize();
             String maxTerms = request.getParameter("maxTerms");
             if (maxTerms != null) {
                 maxSize = Integer.parseInt(maxTerms);
             }
-            
+
             List<String> fields = previous.getFields();
             String fldsParam = request.getParameter("fields");
             if (fldsParam != null) {
@@ -156,7 +156,7 @@ public class PreviousTermServlet extends HttpServlet {
      * @throws IOException if an I/O error occurs
      */
     @Override
-    protected void doGet(HttpServletRequest request, 
+    protected void doGet(HttpServletRequest request,
                          HttpServletResponse response)
             throws ServletException, IOException {
         processRequest(request, response);
@@ -172,7 +172,7 @@ public class PreviousTermServlet extends HttpServlet {
      * @throws IOException if an I/O error occurs
      */
     @Override
-    protected void doPost(HttpServletRequest request, 
+    protected void doPost(HttpServletRequest request,
                            HttpServletResponse response)
             throws ServletException, IOException {
         processRequest(request, response);
