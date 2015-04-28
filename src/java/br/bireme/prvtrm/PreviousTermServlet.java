@@ -21,11 +21,14 @@
 
 package br.bireme.prvtrm;
 
-import java.io.File;
 import java.io.IOException;
 import java.io.PrintWriter;
 import java.util.Arrays;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 import javax.servlet.ServletConfig;
 import javax.servlet.ServletException;
 import javax.servlet.annotation.WebServlet;
@@ -57,11 +60,11 @@ public class PreviousTermServlet extends HttpServlet {
     @Override
     public void init(final ServletConfig servletConfig)
                                                        throws ServletException {
-        final String sdir = servletConfig.getInitParameter("INDEX_DIR");
-        if (sdir == null) {
-            throw new ServletException("missing index directory (INDEX_DIR) "
-                                                                + "parameter.");
-        }
+        final String coll = servletConfig.getInitParameter("INDEX_DIRECTORIES");
+        if (coll == null) {
+            throw new ServletException("missing index directory " +
+                                              "(INDEX_DIRECTORIES) parameter.");
+        }        
         final String maxTerms = servletConfig.getInitParameter("MAX_TERMS");
         if (maxTerms == null) {
             throw new ServletException("missing maximum number of returned "
@@ -74,12 +77,26 @@ public class PreviousTermServlet extends HttpServlet {
         }
 
         try {
-            previous = new PreviousTerm(new File(sdir),
+            previous = new PreviousTerm(getIndexPaths(coll),
                                         Arrays.asList(fields.split("[,;\\-]")),
                                         Integer.parseInt(maxTerms));
         } catch (Exception ex) {
             throw new ServletException(ex);
         }
+    }
+    
+    private Map<String,String> getIndexPaths(final String in) {
+        assert in != null;
+        
+        final Map<String,String> map = new HashMap<String,String>();
+        final Matcher mat = Pattern.compile(
+         "\\[\\s*name\\s*=\\s*\"([^\"]+)\"\\s+path\\s*=\\s*\"([^\"]+)\"\\s*\\]")
+                                                                   .matcher(in);
+                
+        while (mat.find()) {
+            map.put(mat.group(1), mat.group(2));
+        }
+        return map;
     }
 
     /**
@@ -99,6 +116,9 @@ public class PreviousTermServlet extends HttpServlet {
         final PrintWriter out = response.getWriter();
 
         try {
+            // Se null utiliza o index padrao
+            final String index = request.getParameter("index");
+            
             final String init = request.getParameter("init");
             if (init == null) {
                 throw new ServletException("missing 'init' parameter");
@@ -120,10 +140,10 @@ public class PreviousTermServlet extends HttpServlet {
             String direction = request.getParameter("direction");
             if ((direction == null) ||
                 (direction.compareToIgnoreCase("next") == 0)) {
-                terms = previous.getNextTerms(init, fields, maxSize);
+                terms = previous.getNextTerms(index, init, fields, maxSize);
                 direction = "next";
             } else {
-                terms = previous.getPreviousTerms(init, fields, maxSize);
+                terms = previous.getPreviousTerms(index, init, fields, maxSize);
                 direction = "previous";
             }
 
@@ -133,6 +153,7 @@ public class PreviousTermServlet extends HttpServlet {
 
             jlistTerms.addAll(terms);
             jlistFields.addAll(fields);
+            jobj.put("index", index);
             jobj.put("init", init);
             jobj.put("direction", direction);
             jobj.put("maxTerms", maxSize);

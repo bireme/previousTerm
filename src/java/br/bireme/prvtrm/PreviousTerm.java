@@ -24,8 +24,10 @@ package br.bireme.prvtrm;
 import java.io.File;
 import java.io.IOException;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.LinkedList;
 import java.util.List;
+import java.util.Map;
 import org.apache.lucene.index.IndexReader;
 import org.apache.lucene.index.Term;
 import org.apache.lucene.index.TermEnum;
@@ -41,16 +43,20 @@ import org.apache.lucene.store.SimpleFSDirectory;
  */
 public class PreviousTerm {
     class Tum {
-        private TermEnum tenum;
+        private final TermEnum tenum;
         private String cur;
         private boolean eof;
         private boolean first;
 
-        Tum(final String field,
+        Tum(final String sdir,
+            final String field,
             final String term) throws IOException {
+            assert sdir != null;
             assert field != null;
             assert term != null;
 
+            final IndexReader reader = getIndexReader(sdir);
+            
             cur = term;
             tenum = reader.terms(new Term(field, term));
             first = true;
@@ -107,8 +113,10 @@ public class PreviousTerm {
         String cur;
         boolean first;
 
-        NextTerms(final List<String> fields,
+        NextTerms(final String sdir,
+                  final List<String> fields,
                   final String term) throws IOException {
+            assert sdir != null;
             assert fields != null;
             assert term != null;
 
@@ -118,7 +126,7 @@ public class PreviousTerm {
             first = true;
 
             for (String fld : fields) {
-                lte.add(new Tum(fld, term));
+                lte.add(new Tum(sdir, fld, term));
             }
         }
 
@@ -164,9 +172,9 @@ public class PreviousTerm {
         }
     }
 
-    public class TermElem {
-        private String term;
-        private int tot;
+    class TermElem {
+        private final String term;
+        private final int tot;
 
         public TermElem(String term) {
             this.term = term;
@@ -180,12 +188,12 @@ public class PreviousTerm {
         }
     }
 
-    private final IndexReader reader;
+    private final Map<String,IndexReader> readers;    
     private final List<String> fields;
     private final int maxSize;
 
     public List<String> getFields() {
-        return fields;
+        return new ArrayList<String>(fields);
     }
 
     public int getMaxSize() {
@@ -194,16 +202,17 @@ public class PreviousTerm {
 
     /**
      * Construtor da classe
-     * @param dir caminho para o diretorio onde esta o indice do Lucene
+     * @param dirs map de caminhos para os diretorios onde estao os indice do 
+     * Lucene. Contém: (nome do indice, caminho para o indice)
      * @param fields indica a qual campos os termos previos pretencem
      * @param maxSize numero de termos previos a serem retornados
      * @throws IOException
      */
-    public PreviousTerm(final File dir,
-                         final List<String> fields,
-                         final int maxSize) throws IOException {
-        if (dir == null) {
-            throw new NullPointerException("dir");
+    public PreviousTerm(final Map<String,String> dirs,
+                        final List<String> fields,
+                        final int maxSize) throws IOException {
+        if (dirs == null) {
+            throw new NullPointerException("dirs");
         }
         if (fields == null) {
             throw new NullPointerException("fields");
@@ -212,10 +221,15 @@ public class PreviousTerm {
             throw new IllegalArgumentException("maxSize <= 0");
         }
 
-        final Directory sdir = new SimpleFSDirectory(dir);
-        reader = IndexReader.open(sdir);
         this.fields = fields;
         this.maxSize = maxSize;
+        this.readers = new HashMap<String,IndexReader>(); 
+        
+        for (Map.Entry<String,String> entry : dirs.entrySet()) {
+            final Directory sdir = new SimpleFSDirectory(
+                                                    new File(entry.getValue()));
+            this.readers.put(entry.getKey(), IndexReader.open(sdir));
+        }        
     }
 
     /**
@@ -223,35 +237,39 @@ public class PreviousTerm {
      * @throws IOException
      */
     public void close() throws IOException {
-        if (reader != null) {
+        for (IndexReader reader: readers.values()) {
             reader.close();
         }
-    }
-
+    }   
+    
     /**
      * Encontra os termos previos de um indice em relacao ao termo inicial
+     * @param sdir nome do indice lucene a ser utilizado
      * @param init termo inicial em relacao ao qual os termos previos serao encontrados
      * @return lista de termos previos em relacao ao termo inicial
      * @throws IOException
      */
-    public List<String> getPreviousTerms(final String init) throws IOException {
-        if ((init == null) || init.isEmpty()) {
-            throw new IOException("invalid init");
-        }
-        return getPreviousTerms(init, fields, maxSize);
+    public List<String> getPreviousTerms(final String sdir,
+                                         final String init) throws IOException {
+        return getPreviousTerms(sdir, init, fields, maxSize);        
     }
-
+    
     /**
      * Encontra os termos previos de um indice em relacao ao termo inicial
+     * @param sdir nome do indice lucene a ser utilizado
      * @param init termo inicial em relacao ao qual os termos previos serao encontrados
      * @param fields indica a quais campos os termos devem pertencer
      * @param maxSize tamanho maximo da lista de termos a ser retornada
      * @return lista de termos previos em relacao ao termo inicial
      * @throws IOException
      */
-    public List<String> getPreviousTerms(final String init,
+    public List<String> getPreviousTerms(final String sdir,
+                                         final String init,
                                          final List<String> fields,
                                          final int maxSize) throws IOException {
+        if ((sdir == null) || sdir.isEmpty()) {
+            throw new IOException("invalid sdir");
+        }
         if ((init == null) || init.isEmpty()) {
             throw new IOException("invalid init");
         }
@@ -267,7 +285,7 @@ public class PreviousTerm {
         int mSize = maxSize;
         String initX = init;
 
-        final NextTerms nterms = new NextTerms(fields, initX);
+        final NextTerms nterms = new NextTerms(sdir, fields, initX);
         if (nterms.hasNext() && nterms.next().equals(initX)) {
             ret.add(initX);
             mSize--;
@@ -275,7 +293,7 @@ public class PreviousTerm {
         nterms.close();
 
         for (int tot = 0; tot < mSize; tot++) {
-            final String prev = getPreviousTerm(initX, fields);
+            final String prev = getPreviousTerm(sdir, initX, fields);
 
             if (prev == null) {
                 break;
@@ -288,15 +306,34 @@ public class PreviousTerm {
     }
 
     /**
+     * 
+     * @param index nome do diretorio onde esta o indice Lucene a ser lido
+     * @return um objeto IndexReader em cache ou cria um novo
+     */
+    private IndexReader getIndexReader(final String index) throws IOException {
+        assert index != null;
+        
+        final IndexReader reader = readers.get(index);
+        if (reader == null) {
+            throw new IOException("invalid index name: " + index);
+        }
+        
+        return reader;
+    }
+    
+    /**
      * Encontra o termo previo em relacao ao termo inicial
+     * @param sdir nome do indice lucene a ser utilizado
      * @param init termo inicial em relacao ao qual o termo previo sera encontrado
      * @param fields indica a quais campos os termo deve pertencer
      * @return o termo previo em relacao ao termo inicial
      * @throws IOException
      */
-    private String getPreviousTerm(final String init,
+    private String getPreviousTerm(final String sdir,
+                                   final String init,
                                    final List<String> fields)
                                                             throws IOException {
+        assert sdir != null;
         assert fields != null;
         assert (init != null) && (!init.isEmpty());
 
@@ -317,7 +354,7 @@ public class PreviousTerm {
             List<String> nextWords;
             int idx = -1;
 
-            nextWords = getNextTerms(previousWord, fields, RANGE);
+            nextWords = getNextTerms(sdir, previousWord, fields, RANGE);
             if (nextWords.isEmpty()) {
                 ret = null;
                 break;
@@ -360,7 +397,7 @@ public class PreviousTerm {
      * @return uma string anterior menor que a 'current' mas maior que 'lastGuess'
      */
     private String guessPreviousWord(final String current,
-                                     final String lastGuess) {
+                                     final String lastGuess) {        
         assert current != null;
         assert (lastGuess == null) ? true : (current.compareTo(lastGuess) > 0)
                                                     : current + ">" + lastGuess;
@@ -447,28 +484,36 @@ public class PreviousTerm {
     }
 
     //==========================================================================
-
     /**
      *  Retorna os proximos 'maxSize' termos do indice a partir de 'init'
+     * @param sdir nome do indice lucene a ser utilizado
      * @param init termo inicial a partir do qual os outros serao retornados.
      * Pode ser null ou string vazia
      * @return lista ordenada de termos que são os próximos termos a partir de 'init'
+     * @throws java.io.IOException
      */
-    public List<String> getNextTerms(final String init) throws IOException {
-        return getNextTerms(init, fields, maxSize);
+    public List<String> getNextTerms(final String sdir,
+                                     final String init) throws IOException {
+        return getNextTerms(sdir, init, fields, maxSize);
     }
-
+    
     /**
      *  Retorna os proximos 'maxSize' termos do indice a partir de 'init'
+     * @param sdir nome do indice lucene a ser utilizado
      * @param init termo inicial a partir do qual os outros serao retornados.
      * Pode ser null ou string vazia
      * @param fields indica a quais campos os termos devem pertencer
      * @param maxSize tamanho maximo da lista de termos a ser retornada
      * @return lista ordenada de termos que são os próximos termos a partir de 'init'
+     * @throws java.io.IOException
      */
-    public List<String> getNextTerms(final String init,
+    public List<String> getNextTerms(final String sdir,
+                                     final String init,
                                      final List<String> fields,
                                      final int maxSize) throws IOException {
+        if ((sdir == null) || sdir.isEmpty()) {
+            throw new IOException("invalid sdir");
+        }
         if ((init == null) || init.isEmpty()) {
             throw new IOException("invalid init");
         }
@@ -480,7 +525,7 @@ public class PreviousTerm {
         }
 
         final List<String> ret = new ArrayList<String>();
-        final NextTerms nterms = new NextTerms(fields, init);
+        final NextTerms nterms = new NextTerms(sdir, fields, init);
         int total = 0;
 
         while (nterms.hasNext()) {
