@@ -60,8 +60,8 @@ public class PreviousTermServlet extends HttpServlet {
     @Override
     public void init(final ServletConfig servletConfig)
                                                        throws ServletException {
-        final String coll = servletConfig.getInitParameter("INDEX_DIRECTORIES");
-        if (coll == null) {
+        final String idir = servletConfig.getInitParameter("INDEX_DIRECTORIES");
+        if (idir == null) {
             throw new ServletException("missing index directory " +
                                               "(INDEX_DIRECTORIES) parameter.");
         }        
@@ -77,7 +77,7 @@ public class PreviousTermServlet extends HttpServlet {
         }
 
         try {
-            previous = new PreviousTerm(getIndexPaths(coll),
+            previous = new PreviousTerm(getIndexPaths(idir),
                                         Arrays.asList(fields.split("[,;\\-]")),
                                         Integer.parseInt(maxTerms));
         } catch (Exception ex) {
@@ -165,7 +165,7 @@ public class PreviousTermServlet extends HttpServlet {
             out.close();
         }
     }
-
+    
     // <editor-fold defaultstate="collapsed" desc="HttpServlet methods. Click on the + sign on the left to edit the code.">
     /**
      * Handles the HTTP

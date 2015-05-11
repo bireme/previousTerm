@@ -42,7 +42,7 @@ import org.apache.lucene.store.SimpleFSDirectory;
  * data 20121123
  */
 public class PreviousTerm {
-    class Tum {
+    private class Tum {
         private final TermEnum tenum;
         private String cur;
         private boolean eof;
@@ -60,6 +60,7 @@ public class PreviousTerm {
             cur = term;
             tenum = reader.terms(new Term(field, term));
             first = true;
+            eof = false;
             getNext();
         }
 
@@ -87,7 +88,7 @@ public class PreviousTerm {
         }
 
         private String getNext() throws IOException {
-            if (!eof) {
+            if (hasNext()) {
                 final Term trm = tenum.term();
                 if (trm == null) {
                     eof = true;
@@ -107,7 +108,7 @@ public class PreviousTerm {
         }
     }
 
-    class NextTerms {
+    private class NextTerms {
         final List<String> fields;
         final List<Tum> lte;
         String cur;
@@ -172,7 +173,7 @@ public class PreviousTerm {
         }
     }
 
-    class TermElem {
+    /*private class TermElem {
         private final String term;
         private final int tot;
 
@@ -186,7 +187,7 @@ public class PreviousTerm {
         public int getTotal() {
             return tot;
         }
-    }
+    }*/
 
     private final Map<String,IndexReader> readers;    
     private final List<String> fields;
@@ -198,6 +199,10 @@ public class PreviousTerm {
 
     public int getMaxSize() {
         return maxSize;
+    }
+    
+    public List<String> getIndexes() {
+        return new ArrayList<String>(readers.keySet());
     }
 
     /**
@@ -378,7 +383,6 @@ public class PreviousTerm {
                 }
                 //lowerBound = null;
                 initX = previousWord;
-                continue;
             } else {
                 ret = nextWords.get(idx);               // achou termo previo
                 break;
