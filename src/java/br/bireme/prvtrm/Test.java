@@ -1,11 +1,10 @@
 package br.bireme.prvtrm;
 
 import java.io.IOException;
-import java.util.Arrays;
 import java.util.GregorianCalendar;
-import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
-import java.util.Map;
+import java.util.Set;
 
 /**
  *
@@ -15,10 +14,11 @@ public class Test {
 
     public static void main(String[] args) throws IOException {
         final int size = 100; //50000;
-        final Map<String,String> indexes = new HashMap<String,String>();
-        indexes.put("lil", "/home/heitor/Projetos/DocumentSimilarity/lil");
-        PreviousTerm prev = new PreviousTerm(indexes,                
-                               Arrays.asList(new String []{"tit","abs"}), size);
+        final MongoIndexInfo mii = new MongoIndexInfo("lil", 
+            "/home/heitor/Projetos/DocumentSimilarity/lil", "tit","abs");
+        final Set<MongoIndexInfo> set = new HashSet<MongoIndexInfo>();        
+        set.add(mii);
+        final PreviousTerm prev = new PreviousTerm(set, size);
         List<String> prevs;
 
         String start = "cadit"; //"cabíveis";//"cac"; //"cacinoma";

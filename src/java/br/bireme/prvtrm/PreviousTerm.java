@@ -25,9 +25,10 @@ import java.io.File;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.HashMap;
-import java.util.LinkedList;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import org.apache.lucene.index.IndexReader;
 import org.apache.lucene.index.Term;
 import org.apache.lucene.index.TermEnum;
@@ -41,12 +42,12 @@ import org.apache.lucene.store.SimpleFSDirectory;
  * @author Heitor Barbieri
  * data 20121123
  */
-public class PreviousTerm {
+public class PreviousTerm {  
     private class Tum {
         private final TermEnum tenum;
+        private final String field;
         private String cur;
         private boolean eof;
-        private boolean first;
 
         Tum(final String sdir,
             final String field,
@@ -57,11 +58,11 @@ public class PreviousTerm {
 
             final IndexReader reader = getIndexReader(sdir);
             
+            this.field = field.trim();
             cur = term;
-            tenum = reader.terms(new Term(field, term));
-            first = true;
+            tenum = reader.terms(new Term(this.field, term));
             eof = false;
-            getNext();
+            getInitialNext();
         }
 
         void close() throws IOException {
@@ -74,12 +75,9 @@ public class PreviousTerm {
 
         String next() throws IOException {
             final String ret = cur;
-
-            if (hasNext()) {
-                getNext();
-            } else {
-                cur = null;
-            }
+//System.out.print("hasNext=" + hasNext());
+            getNext();
+//System.out.println(" cur=" + cur + " hasNext=" + hasNext());
             return ret;
         }
 
@@ -87,21 +85,34 @@ public class PreviousTerm {
             return cur;
         }
 
+        private String getInitialNext() throws IOException {
+            final Term trm = tenum.term();
+            if ((trm == null) || (!trm.field().equals(field))) {
+                eof = true;
+                cur = null;
+            } else {
+                eof = false;
+                cur = trm.text();
+                tenum.next();                    
+            }
+
+            return cur;
+        }
+        
         private String getNext() throws IOException {
             if (hasNext()) {
                 final Term trm = tenum.term();
-                if (trm == null) {
+                if ((trm == null) || (!trm.field().equals(field))) {
                     eof = true;
                     cur = null;
                 } else {
-                    eof = false;
-                    if (first) {
-                        first = false;
-                    } else {
-                        tenum.next();
-                    }
                     cur = trm.text();
+                    tenum.next();
+                    final Term trm1 = tenum.term();
+                    eof = ((trm1 == null) || (!trm1.field().equals(field)));
                 }
+            } else {
+                cur = null;
             }
 
             return cur;
@@ -109,20 +120,20 @@ public class PreviousTerm {
     }
 
     private class NextTerms {
-        final List<String> fields;
-        final List<Tum> lte;
+        final Set<String> fields;
+        final Set<Tum> lte;
         String cur;
         boolean first;
 
         NextTerms(final String sdir,
-                  final List<String> fields,
+                  final Set<String> fields,
                   final String term) throws IOException {
             assert sdir != null;
             assert fields != null;
             assert term != null;
 
             this.fields = fields;
-            lte = new ArrayList<Tum>();
+            lte = new HashSet<Tum>();
             cur = term;
             first = true;
 
@@ -141,7 +152,8 @@ public class PreviousTerm {
             boolean ret = false;
 
             for (Tum tum : lte) {
-                if (tum.hasNext()) {
+                //if (tum.hasNext()) {
+                if (tum.current() != null) {
                     ret = true;
                     break;
                 }
@@ -151,89 +163,85 @@ public class PreviousTerm {
         }
 
         String next() throws IOException {
-            String min = new Character(Character.MAX_VALUE).toString();
+            final String max = new Character(Character.MAX_VALUE).toString();
+            String min = max;
 
-            for (Tum tum : lte) {
-                while (tum.hasNext()) {
-                    if (first && tum.current().compareTo(cur) >= 0) {
+            for (Tum tum : lte) {                
+                String tcur = null;
+                while (true) {
+                    tcur = tum.current();                    
+                    if (tcur == null) {
                         break;
-                    } else if (tum.current().compareTo(cur) > 0) {
+                    } else if (first && tcur.compareTo(cur) >= 0) {
                         break;
-                    }
+                    } else if (tcur.compareTo(cur) > 0) {
+                        break;
+                    }               
                     tum.next();
-                }
-                if (tum.current().compareTo(min) < 0) {
-                    min = tum.current();
+                } 
+                if ((tcur != null) && (tcur.compareTo(min) < 0)) {
+                    min = tcur;
                 }
             }
-            cur = min;
+            cur = min.equals(max) ? null : min;
             first = false;
 
             return cur;
         }
     }
 
-    /*private class TermElem {
-        private final String term;
-        private final int tot;
-
-        public TermElem(String term) {
-            this.term = term;
-            tot = 0;
-        }
-        public String getTerm() {
-            return term;
-        }
-        public int getTotal() {
-            return tot;
-        }
-    }*/
-
-    private final Map<String,IndexReader> readers;    
-    private final List<String> fields;
+    private final Map<String,MongoIndexInfo> info;    
     private final int maxSize;
+    private HashMap<String,IndexReader> readers;
 
-    public List<String> getFields() {
-        return new ArrayList<String>(fields);
+    public Map<String,MongoIndexInfo> getInfo() {
+        return new HashMap<String,MongoIndexInfo>(info);
     }
 
     public int getMaxSize() {
         return maxSize;
     }
     
-    public List<String> getIndexes() {
-        return new ArrayList<String>(readers.keySet());
+    public Set<String> getIndexes() {
+        return new HashSet<String>(info.keySet());
+    }
+    
+    public Set<String> getFields(final String index) throws IOException {
+        final Set<String> fields = new HashSet<String>();
+        final MongoIndexInfo mii = info.get(index);
+        
+        if (mii == null) {
+            throw new IOException("invalid index name");
+        }         
+        fields.addAll(mii.fields);
+        
+        return fields;
     }
 
     /**
      * Construtor da classe
-     * @param dirs map de caminhos para os diretorios onde estao os indice do 
-     * Lucene. Contém: (nome do indice, caminho para o indice)
-     * @param fields indica a qual campos os termos previos pretencem
+     * @param info conjunto de  nomes, caminhos e campos dos indices Lucene a 
+     * serem utilizados
      * @param maxSize numero de termos previos a serem retornados
      * @throws IOException
      */
-    public PreviousTerm(final Map<String,String> dirs,
-                        final List<String> fields,
+    public PreviousTerm(final Set<MongoIndexInfo> info,
                         final int maxSize) throws IOException {
-        if (dirs == null) {
-            throw new NullPointerException("dirs");
-        }
-        if (fields == null) {
+        if (info == null) {
             throw new NullPointerException("fields");
         }
         if (maxSize <= 0) {
             throw new IllegalArgumentException("maxSize <= 0");
         }
 
-        this.fields = fields;
+        this.info = new HashMap<String,MongoIndexInfo>();
         this.maxSize = maxSize;
         this.readers = new HashMap<String,IndexReader>(); 
         
-        for (Map.Entry<String,String> entry : dirs.entrySet()) {
-            final Directory sdir = new SimpleFSDirectory(
-                                                    new File(entry.getValue()));
-            this.readers.put(entry.getKey(), IndexReader.open(sdir));
+        for (MongoIndexInfo mii : info) {            
+            final Directory sdir = new SimpleFSDirectory(new File(mii.path));
+            this.readers.put(mii.name, IndexReader.open(sdir));
+            this.info.put(mii.name, mii);
         }        
     }
 
@@ -251,12 +259,13 @@ public class PreviousTerm {
      * Encontra os termos previos de um indice em relacao ao termo inicial
      * @param sdir nome do indice lucene a ser utilizado
      * @param init termo inicial em relacao ao qual os termos previos serao encontrados
-     * @return lista de termos previos em relacao ao termo inicial
+     * @return Lista de termos previos em relacao ao termo inicial
      * @throws IOException
      */
     public List<String> getPreviousTerms(final String sdir,
                                          final String init) throws IOException {
-        return getPreviousTerms(sdir, init, fields, maxSize);        
+        
+        return getPreviousTerms(sdir, init, getFields(sdir), maxSize);        
     }
     
     /**
@@ -270,7 +279,7 @@ public class PreviousTerm {
      */
     public List<String> getPreviousTerms(final String sdir,
                                          final String init,
-                                         final List<String> fields,
+                                         final Set<String> fields,
                                          final int maxSize) throws IOException {
         if ((sdir == null) || sdir.isEmpty()) {
             throw new IOException("invalid sdir");
@@ -284,9 +293,11 @@ public class PreviousTerm {
         if (maxSize <= 0) {
             throw new IOException("invalid maxSize");
         }
-
-        final LinkedList<String> ret = new LinkedList<String>();
-        final List<Tum> lte = new ArrayList<Tum>();
+        if (!getFields(sdir).containsAll(fields)) {
+            throw new IOException("invalid requested fields");
+        }
+                
+        final List<String> ret = new ArrayList<String>();
         int mSize = maxSize;
         String initX = init;
 
@@ -336,56 +347,58 @@ public class PreviousTerm {
      */
     private String getPreviousTerm(final String sdir,
                                    final String init,
-                                   final List<String> fields)
+                                   final Set<String> fields)
                                                             throws IOException {
         assert sdir != null;
         assert fields != null;
         assert (init != null) && (!init.isEmpty());
 
-        final int RANGE = 10;
-        final int MAXTOTFIRSTPOS = 210;
+        final int RANGE = 10;             // next terms max buffer
+        final int MAXTOTFIRSTPOS = 210;   // max tries to guess the previous world
 
         String initX = init;
         String lowerBound = null;
         String ret;
         int totFirstPos = 0;
+        int totGetNext = 0;
 
         while (true) {
             final String previousWord = guessPreviousWord(initX, lowerBound);
             if (previousWord == null) {
                 ret = null;
                 break;
-            }
-            List<String> nextWords;
-            int idx = -1;
-
-            nextWords = getNextTerms(sdir, previousWord, fields, RANGE);
+            }            
+            final List<String> nextWords = 
+                                getNextTerms(sdir, previousWord, fields, RANGE);
             if (nextWords.isEmpty()) {
-                ret = null;
-                break;
-            }
-            final String last = nextWords.get(nextWords.size() - 1);
-            if (last.compareTo(initX) < 0) {    // init esta em um bloco adiante
-                //initX = init;
-                lowerBound = last;
-                continue;
-            }
-            for (String word : nextWords) {     // init esta no bloco corrente
-                if (word.compareTo(init) >= 0) {
-                    break;
-                }
-                idx++;
-            }
-            if (idx == -1) {                    // init esta na primeira posicao
-                if (totFirstPos++ > MAXTOTFIRSTPOS) {
+                if (totGetNext++ > MAXTOTFIRSTPOS) {
                     ret = lowerBound;
                     break;
                 }
-                //lowerBound = null;
                 initX = previousWord;
             } else {
-                ret = nextWords.get(idx);               // achou termo previo
-                break;
+                final String last = nextWords.get(nextWords.size() - 1);
+                if (last.compareTo(initX) < 0) {    
+                    lowerBound = last;              // init esta em um bloco adiante
+                } else {
+                    int idx = 0;
+                    for (String word : nextWords) {     // init esta no bloco corrente
+                        if (word.compareTo(init) >= 0) {
+                            break;
+                        }
+                        idx++;
+                    }
+                    if (idx == 0) {                    // init esta na primeira posicao
+                        if (totFirstPos++ > MAXTOTFIRSTPOS) { // stop guessing previous key
+                            ret = lowerBound;
+                            break;
+                        }
+                        initX = previousWord;
+                    } else {
+                        ret = nextWords.get(idx - 1);  // achou termo previo
+                        break;
+                    }
+                }
             }
         }
         return ret;
@@ -498,7 +511,7 @@ public class PreviousTerm {
      */
     public List<String> getNextTerms(final String sdir,
                                      final String init) throws IOException {
-        return getNextTerms(sdir, init, fields, maxSize);
+        return getNextTerms(sdir, init, getFields(sdir), maxSize);
     }
     
     /**
@@ -513,7 +526,7 @@ public class PreviousTerm {
      */
     public List<String> getNextTerms(final String sdir,
                                      final String init,
-                                     final List<String> fields,
+                                     final Set<String> fields,
                                      final int maxSize) throws IOException {
         if ((sdir == null) || sdir.isEmpty()) {
             throw new IOException("invalid sdir");
@@ -527,6 +540,9 @@ public class PreviousTerm {
         if (maxSize <= 0) {
             throw new IOException("invalid maxSize");
         }
+        if (!getFields(sdir).containsAll(fields)) {
+            throw new IOException("invalid requested fields");
+        }
 
         final List<String> ret = new ArrayList<String>();
         final NextTerms nterms = new NextTerms(sdir, fields, init);
@@ -536,7 +552,10 @@ public class PreviousTerm {
             if (++total > maxSize) {
                 break;
             }
-            ret.add(nterms.next());
+            final String next = nterms.next();
+            if (next != null) {
+                ret.add(next);
+            }
         }
         nterms.close();
 
