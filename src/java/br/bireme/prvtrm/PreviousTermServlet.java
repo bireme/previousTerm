@@ -24,8 +24,10 @@ package br.bireme.prvtrm;
 import java.io.IOException;
 import java.io.PrintWriter;
 import java.util.Arrays;
+import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
@@ -35,6 +37,9 @@ import javax.servlet.annotation.WebServlet;
 import javax.servlet.http.HttpServlet;
 import javax.servlet.http.HttpServletRequest;
 import javax.servlet.http.HttpServletResponse;
+import org.apache.logging.log4j.Level;
+import org.apache.logging.log4j.LogManager;
+import org.apache.logging.log4j.Logger;
 import org.json.simple.JSONArray;
 import org.json.simple.JSONObject;
 
@@ -47,6 +52,7 @@ import org.json.simple.JSONObject;
                                                        {"/PreviousTermServlet"})
 public class PreviousTermServlet extends HttpServlet {
 
+    private static final Logger logger = LogManager.getLogger(PreviousTermServlet.class);
     private PreviousTerm previous;
 
     /**
@@ -60,37 +66,37 @@ public class PreviousTermServlet extends HttpServlet {
     @Override
     public void init(final ServletConfig servletConfig)
                                                        throws ServletException {
-        final String info = servletConfig.getInitParameter("LUCENE_INDEXES");
-        if (info == null) {
-            throw new ServletException("missing index directory " +
-                                              "(LUCENE_INDEXES) parameter.");
-        }        
-        final String maxTerms = servletConfig.getInitParameter("MAX_TERMS");
-        if (maxTerms == null) {
-            throw new ServletException("missing maximum number of returned "
-                                              + "terms (MAX_TERMS) parameter.");
-        }
         try {
-            previous = new PreviousTerm(getIndexInfo(info),
+            final String maxTerms = servletConfig.getInitParameter("MAX_TERMS");
+            if (maxTerms == null) {
+                throw new ServletException("missing maximum number of returned "
+                                              + "terms (MAX_TERMS) parameter.");
+            }
+            final String indexes = servletConfig.getInitParameter(
+                                                              "LUCENE_INDEXES");
+            if (indexes == null) {
+                throw new ServletException(
+                             "missing LUCENE_INDEXES configuration parameter.");
+            }
+            previous = new PreviousTerm(getIndexInfo(indexes),
                                         Integer.parseInt(maxTerms));
         } catch (Exception ex) {
+            logger.catching(Level.ERROR, ex);
             throw new ServletException(ex);
         }
     }
     
-    // [name="<index name>" path="<index path>" fields="<fieldName1,fieldName2,..."]
-    private Set<MongoIndexInfo> getIndexInfo(final String in) {
+    // [name="<index name>" path="<index path>"]
+    private Map<String,String> getIndexInfo(final String in) {
         assert in != null;
         
-        final Set<MongoIndexInfo> infol = new HashSet<MongoIndexInfo>();
+        final Map<String,String> infol = new HashMap<String,String>();
         final Matcher mat = Pattern.compile(
-         "\\[\\s*name\\s*=\\s*\"([^\"]+)\"\\s+path\\s*=\\s*\"([^\"]+)\"\\s+" 
-         + "fields\\s*=\\s*\"([^\"]+)\"\\s*\\]").matcher(in);
+         "\\[\\s*name\\s*=\\s*\"([^\"]+)\"\\s+path\\s*=\\s*\"([^\"]+)\"\\s*\\]")
+                                                                   .matcher(in);
                 
         while (mat.find()) {
-            infol.add(
-                  new MongoIndexInfo(mat.group(1), mat.group(2), 
-                                            mat.group(3).split("[\\,\\;]")));
+            infol.put(mat.group(1), mat.group(2));
         }
         return infol;
     }
@@ -103,66 +109,82 @@ public class PreviousTermServlet extends HttpServlet {
      * @param request servlet request
      * @param response servlet response
      * @throws ServletException if a servlet-specific error occurs
-     * @throws IOException if an I/O error occurs
+     * @throws java.io.IOException
      */
     protected void processRequest(final HttpServletRequest request,
                                   final HttpServletResponse response)
-                                          throws ServletException, IOException {
-        response.setContentType("application/json; charset=UTF-8");
-        final PrintWriter out = response.getWriter();
-        final String index = request.getParameter("index");
+                                          throws ServletException, IOException {                         
+        PrintWriter out = null;
         
-        if (index == null) {
-            throw new ServletException("missing 'index' parameter");
+        try {
+            response.setContentType("application/json; charset=UTF-8");
+            out = response.getWriter();
+            
+            final String index = request.getParameter("index");
+            if (index == null) {
+                throw new ServletException("missing 'index' parameter");
+            }
+
+            final String init = request.getParameter("init");
+            if (init == null) {
+                throw new ServletException("missing 'init' parameter");
+            }
+            
+            final String maxTerms = request.getParameter("maxTerms");
+            final int maxSize = (maxTerms == null) ? previous.getMaxSize()
+                                                   : Integer.parseInt(maxTerms);            
+
+            final String sfields = request.getParameter("fields");
+            final Set<String> fields;
+            if (sfields == null) {
+                throw new ServletException("missing 'fields' parameter");
+            } else {
+                fields = new HashSet<String>(
+                        Arrays.asList(sfields.trim().split(" *[\\,\\;] *")));
+                final Set<String> fldSet = previous.getFields(index);
+                if ((fldSet == null) || (!fldSet.containsAll(fields))) {
+                   throw new ServletException("invalid fields:" + sfields);
+                }
+            }
+
+            final List<String> terms;
+            String direction = request.getParameter("direction");
+            if ((direction == null) ||
+                (direction.compareToIgnoreCase("previous") == 0)) {
+                terms = previous.getPreviousTerms(index, init, fields, maxSize);
+                direction = "previous";
+            } else if (direction.compareToIgnoreCase("next") == 0) {
+                terms = previous.getNextTerms(index, init, fields, maxSize);
+                direction = "next";
+            } else {
+                throw new IOException("invalid direction parameter");
+            }
+
+            final JSONObject jobj = new JSONObject();
+            final JSONArray jlistTerms = new JSONArray();
+            final JSONArray jlistFields = new JSONArray();
+
+            jlistTerms.addAll(terms);
+            jlistFields.addAll(fields);
+            jobj.put("index", index);
+            jobj.put("init", init);
+            jobj.put("direction", direction);
+            jobj.put("maxTerms", maxSize);
+            jobj.put("fields", jlistFields);
+            jobj.put("terms", jlistTerms);
+
+            out.println(jobj.toJSONString());
+            
+        } catch (Exception ex) {
+            logger.catching(Level.ERROR, ex);                        
+            if (out != null) {
+                out.println("{}");
+            }
+        } finally {
+            if (out != null) {
+                out.close();
+            }
         }
-
-        final String init = request.getParameter("init");
-        if (init == null) {
-            throw new ServletException("missing 'init' parameter");
-        }
-
-        int maxSize = previous.getMaxSize();
-        String maxTerms = request.getParameter("maxTerms");
-        if (maxTerms != null) {
-            maxSize = Integer.parseInt(maxTerms);
-        }
-
-        final String sfields = request.getParameter("fields");
-        final Set<String> fields;
-        if (sfields == null) {
-            fields = previous.getFields(index);
-        } else {
-            fields = new HashSet<String>(
-                    Arrays.asList(sfields.split("[\\,\\;]")));
-        }
-
-        final List<String> terms;
-        String direction = request.getParameter("direction");
-        if ((direction == null) ||
-            (direction.compareToIgnoreCase("previous") == 0)) {
-            terms = previous.getPreviousTerms(index, init, fields, maxSize);
-            direction = "previous";
-        } else if (direction.compareToIgnoreCase("next") == 0) {
-            terms = previous.getNextTerms(index, init, fields, maxSize);
-            direction = "next";
-        } else {
-            throw new IOException("invalid direction parameter");
-        }
-
-        final JSONObject jobj = new JSONObject();
-        final JSONArray jlistTerms = new JSONArray();
-        final JSONArray jlistFields = new JSONArray();
-
-        jlistTerms.addAll(terms);
-        jlistFields.addAll(fields);
-        jobj.put("index", index);
-        jobj.put("init", init);
-        jobj.put("direction", direction);
-        jobj.put("maxTerms", maxSize);
-        jobj.put("fields", jlistFields);
-        jobj.put("terms", jlistTerms);
-
-        out.println(jobj.toJSONString());
 }
     
     // <editor-fold defaultstate="collapsed" desc="HttpServlet methods. Click on the + sign on the left to edit the code.">

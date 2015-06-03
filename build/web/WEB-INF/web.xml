@@ -7,9 +7,9 @@
             <description>List of Lucene indexes</description>
             <param-name>LUCENE_INDEXES</param-name>
             <param-value>
-                <!--[name="<index name>" path="<index path>" fields="<fieldName1,fieldName2,..."]-->
-                [name="lil" path="/home/heitor/Projetos/DocumentSimilarity/lil" fields="tit,abs"]
-                [name="sms" path="/home/heitor/tmp/index/" fields="la,tag_sessp,db"]
+                <!--[name="<index name>" path="<index path>"]-->
+                [name="lil" path="/home/heitor/Projetos/DocumentSimilarity/lil"]
+                [name="sms" path="/home/heitor/tmp/index/"]
             </param-value>
         </init-param>
         <init-param>
@@ -30,4 +30,27 @@
     <welcome-file-list>
         <welcome-file>index.jsp</welcome-file>
     </welcome-file-list>
+    
+    <!-- Log4j 2 settings -->
+    <listener>
+        <listener-class>org.apache.logging.log4j.web.Log4jServletContextListener</listener-class>
+    </listener>
+ 
+    <filter>
+        <filter-name>log4jServletFilter</filter-name>
+        <filter-class>org.apache.logging.log4j.web.Log4jServletFilter</filter-class>
+    </filter>
+    <filter-mapping>
+        <filter-name>log4jServletFilter</filter-name>
+        <url-pattern>/*</url-pattern>
+        <dispatcher>REQUEST</dispatcher>
+        <dispatcher>FORWARD</dispatcher>
+        <dispatcher>INCLUDE</dispatcher>
+        <dispatcher>ERROR</dispatcher>
+    </filter-mapping>
+        
+    <context-param>
+        <param-name>log4jConfiguration</param-name>
+        <param-value>/WEB-INF/log4j2.xml</param-value>
+    </context-param>
 </web-app>

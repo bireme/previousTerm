@@ -17,8 +17,8 @@
         <p>Retrives n (next/previous) terms from a Lucene Index starting from a
         given term.</p>
         <p>Get parameters are:</p>
-        <p>index=&lt;Lucene index name&gt; <br/>init=&lt;initial key&gt; <br/>[direction=&lt;'next' or 'previous'&gt;] <br/>[maxTerms=&lt;max returned keys&gt;] <br/>[fields=&lt;field1,field2,...&gt;]</p>
+        <p>index=&lt;Lucene index name&gt; <br/>init=&lt;initial key&gt; <br/>fields=&lt;field1,field2,...&gt; <br/>[direction=&lt;'next' or 'previous'&gt;] <br/>[maxTerms=&lt;max returned keys&gt;]</p>
         <p>Example:</p>
-        <p>/PreviousTermServlet?index=lil&init=baar&direction=previous</p>
+        <p>/PreviousTermServlet?index=lil&init=baar&direction=previous&fields=tit,abs</p>
     </body>
 </html>

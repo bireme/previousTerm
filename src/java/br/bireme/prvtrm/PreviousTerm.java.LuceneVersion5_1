@@ -30,13 +30,18 @@ import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import org.apache.lucene.index.DirectoryReader;
 import org.apache.lucene.index.FieldInfo;
+import org.apache.lucene.index.Fields;
 import org.apache.lucene.index.IndexReader;
+import org.apache.lucene.index.MultiFields;
+import org.apache.lucene.index.ReaderUtil;
 import org.apache.lucene.index.Term;
-import org.apache.lucene.index.TermEnum;
+import org.apache.lucene.index.Terms;
+import org.apache.lucene.index.TermsEnum;
 import org.apache.lucene.store.Directory;
 import org.apache.lucene.store.SimpleFSDirectory;
-import org.apache.lucene.util.ReaderUtil;
+import org.apache.lucene.util.BytesRef;
 
 /**
  * Esta classe retorna um número determinados de chaves do índice do Lucene
@@ -48,7 +53,7 @@ import org.apache.lucene.util.ReaderUtil;
  */
 public class PreviousTerm {  
     private class Tum {
-        private final TermEnum tenum;
+        private final TermsEnum tenum;
         private final String field;
         private String cur;
         private boolean eof;
@@ -64,13 +69,21 @@ public class PreviousTerm {
             
             this.field = field.trim();
             cur = term;
-            tenum = reader.terms(new Term(this.field, term));
+            final Fields fields = MultiFields.getFields(reader);
+            if (fields == null) {
+                throw new IOException("reader has no fields");
+            }
+            final Terms terms = fields.terms(field);
+            if (terms == null) {
+                throw new IOException("empty terms for field: " + field);
+            }
+            tenum = terms.iterator(null);
+            if (tenum == null) {
+                throw new IOException("empty iterator for field: " + field);
+            }
+            //tenum = reader.terms(new Term(this.field, term));
             eof = false;
             getInitialNext();
-        }
-
-        void close() throws IOException {
-            tenum.close();
         }
 
         boolean hasNext() {
@@ -90,13 +103,14 @@ public class PreviousTerm {
         }
 
         private String getInitialNext() throws IOException {
-            final Term trm = tenum.term();
-            if ((trm == null) || (!trm.field().equals(field))) {
+            final BytesRef bref = tenum.term();
+            
+            if (bref == null) {
                 eof = true;
                 cur = null;
             } else {
                 eof = false;
-                cur = trm.text();
+                cur = bref.utf8ToString();
                 tenum.next();                    
             }
 
@@ -105,15 +119,16 @@ public class PreviousTerm {
         
         private String getNext() throws IOException {
             if (hasNext()) {
-                final Term trm = tenum.term();
-                if ((trm == null) || (!trm.field().equals(field))) {
+                final BytesRef bref = tenum.term();
+                
+                if (bref == null) {
                     eof = true;
                     cur = null;
                 } else {
-                    cur = trm.text();
+                    cur = bref.utf8ToString();
                     tenum.next();
-                    final Term trm1 = tenum.term();
-                    eof = ((trm1 == null) || (!trm1.field().equals(field)));
+                    final BytesRef bref1 = tenum.term();
+                    eof = (bref1 == null);
                 }
             } else {
                 cur = null;
@@ -143,12 +158,6 @@ public class PreviousTerm {
 
             for (String fld : fields) {
                 lte.add(new Tum(sdir, fld, term));
-            }
-        }
-
-        void close() throws IOException {
-            for (Tum tum : lte) {
-                tum.close();
             }
         }
 
@@ -242,32 +251,32 @@ public class PreviousTerm {
 
         this.info = info;
         this.maxSize = maxSize;
-        this.readers = new HashMap<String,IndexReader>(); 
+        this.readers = new HashMap<String,IndexReader>();
         this.fields = new HashMap<String,Set<String>>();
         
         for (Map.Entry<String,String> entry : info.entrySet()) {            
             final Directory sdir = new SimpleFSDirectory(
-                                                    new File(entry.getValue()));
-            final IndexReader reader = IndexReader.open(sdir);
+                                           new File(entry.getValue()).toPath());
+            final IndexReader reader = DirectoryReader.open(sdir);
             final String key = entry.getKey();
             final HashSet<String> fset = new HashSet<String>();
             
             this.readers.put(key, reader);
             this.fields.put(key, fset);
             
-            for (String fname : ReaderUtil.getIndexedFields(reader)) {
+            //final Iterator<FieldInfo> fiterator = reader.getFieldInfos().iterator();
+            final Fields flds = MultiFields.getFields(reader);
+            if (flds == null) {
+                throw new IOException("the reader has no postings");
+            }
+            final Iterator<String> fiterator = flds.iterator(); 
+
+            while (fiterator.hasNext()) {
+                final String fname = fiterator.next();
                 fset.add(fname);
-                //System.out.println("[" + fname + "]");
+//System.out.println("[" + fname + "]");                
             }
             //reader.close();
-            //final Iterator<FieldInfo> fiterator = reader.getFieldInfos().iterator();
-            //final Iterator<FieldInfo> fiterator =  
-                              //ReaderUtil.getMergedFieldInfos(reader).iterator();
-            //while (fiterator.hasNext()) {            
-            //    final FieldInfo finfo = fiterator.next();
-            //    fset.add(finfo.name);
-//System.out.println("[" + finfo.name + "]");                
-            //}
         }                        
     }
 
@@ -295,16 +304,16 @@ public class PreviousTerm {
                                          final Set<String> fields,
                                          final int maxSize) throws IOException {
         if ((sdir == null) || sdir.isEmpty()) {
-            throw new IOException("empty 'sdir' parameter");
+            throw new IOException("invalid sdir");
         }
         if ((init == null) || init.isEmpty()) {
-            throw new IOException("empty 'init' parameter");
+            throw new IOException("invalid init");
         }
         if ((fields == null) || fields.isEmpty()) {
-            throw new IOException("empty 'fields' parameter");
+            throw new IOException("invalid fields");
         }
         if (maxSize <= 0) {
-            throw new IOException("invalid maxSize [" + maxSize + "]");
+            throw new IOException("invalid maxSize");
         }
         
         final List<String> ret = new ArrayList<String>();
@@ -316,7 +325,6 @@ public class PreviousTerm {
             ret.add(initX);
             mSize--;
         }
-        nterms.close();
 
         for (int tot = 0; tot < mSize; tot++) {
             final String prev = getPreviousTerm(sdir, initX, fields);
@@ -551,7 +559,6 @@ public class PreviousTerm {
                 ret.add(next);
             }
         }
-        nterms.close();
 
         return ret;
     }

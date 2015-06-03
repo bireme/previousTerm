@@ -29,12 +29,12 @@ import java.util.Set;
  * @author Heitor Barbieri
  * date: 20150525
  */
-public class MongoIndexInfo {    
+public class LuceneIndexInfo {    
     final String name;
     final String path;
     final Set<String> fields; 
     
-    public MongoIndexInfo(final String name, 
+    public LuceneIndexInfo(final String name, 
                           final String path, 
                           final String... fields) {
         this.name = name;
