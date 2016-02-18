@@ -127,6 +127,8 @@ public class PreviousTerm {
         String cur;
         boolean first;
 
+int count;
+
         NextTerms(final String sdir,
                   final Set<String> fields,
                   final String term) throws IOException {
@@ -142,6 +144,7 @@ public class PreviousTerm {
             for (String fld : fields) {
                 lte.add(new Tum(sdir, fld, term));
             }
+count=0;            
         }
 
         void close() throws IOException {
@@ -172,6 +175,7 @@ public class PreviousTerm {
                 String tcur = null;
                 while (true) {
                     tcur = tum.current();                    
+System.out.println("count=" + (++count) + " ttcur=" + tcur);                    
                     if (tcur == null) {
                         break;
                     } else if (first && tcur.compareTo(cur) >= 0) {
@@ -187,7 +191,7 @@ public class PreviousTerm {
             }
             cur = min.equals(max) ? null : min;
             first = false;
-
+System.out.println("==> " + cur);
             return cur;
         }
     }

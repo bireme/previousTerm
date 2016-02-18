@@ -8,8 +8,8 @@
             <param-name>LUCENE_INDEXES</param-name>
             <param-value>
                 <!--[name="<index name>" path="<index path>"]-->
-                [name="lil" path="/home/heitor/Projetos/DocumentSimilarity/lil"]
-                [name="sms" path="/home/heitor/tmp/index/"]
+                [name="lil" path="/home/heitor/Projetos/previousTerm/lilacs"]
+                <!--[name="sms" path="/home/heitor/tmp/index/"]-->
             </param-value>
         </init-param>
         <init-param>
