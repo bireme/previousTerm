@@ -29,12 +29,12 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.TreeSet;
-import org.apache.lucene.index.FieldInfo;
-import org.apache.lucene.index.FieldInfos;
+import org.apache.lucene.index.DirectoryReader;
+import org.apache.lucene.index.Fields;
 import org.apache.lucene.index.IndexReader;
+import org.apache.lucene.index.MultiFields;
 import org.apache.lucene.store.Directory;
 import org.apache.lucene.store.SimpleFSDirectory;
-import org.apache.lucene.util.ReaderUtil;
 
 /**
  *
@@ -48,20 +48,13 @@ public class Tools {
             throw new NullPointerException("sdir");
         }
         final Set<String> set = new TreeSet<String>();
-        final Directory sfsdir = new SimpleFSDirectory(new File(sdir));
-        final IndexReader reader = IndexReader.open(sfsdir);
-        FieldInfos infos;
-        
-        try {
-            infos = reader.getFieldInfos();
-        } catch(UnsupportedOperationException uop) {
-            infos = ReaderUtil.getMergedFieldInfos(reader);
+        final Directory sfsdir = new SimpleFSDirectory(new File(sdir).toPath());
+        final IndexReader reader = DirectoryReader.open(sfsdir);
+        final Fields fields = MultiFields.getFields(reader);
+            
+        for (String name : fields) {
+            set.add(name);
         }
-        
-        for (FieldInfo info : infos) {
-            set.add(info.name);
-        }
-        reader.close();
         
         return set;
     }

@@ -35,7 +35,6 @@ import org.apache.lucene.index.IndexWriter;
 import org.apache.lucene.index.IndexWriterConfig;
 import org.apache.lucene.store.Directory;
 import org.apache.lucene.store.SimpleFSDirectory;
-import org.apache.lucene.util.Version;
 
 /**
  *
@@ -71,20 +70,13 @@ public class GenLilacsIndex {
 
         final Document doc = new Document();
         final org.apache.lucene.document.Field mfnFld = new 
-                org.apache.lucene.document.Field("mfn", 
-                                     Integer.toString(rec.getMfn()), 
-                                     org.apache.lucene.document.Field.Store.YES,
-                                     org.apache.lucene.document.Field.Index.NO);
+                org.apache.lucene.document.StoredField("mfn", rec.getMfn());
         final org.apache.lucene.document.Field titFld = new 
-                org.apache.lucene.document.Field("tit", 
-                                                 title, 
-                               org.apache.lucene.document.Field.Store.YES,
-                               org.apache.lucene.document.Field.Index.ANALYZED);
+                org.apache.lucene.document.TextField("tit", title, 
+                    org.apache.lucene.document.Field.Store.YES);
         final org.apache.lucene.document.Field absFld = new 
-                org.apache.lucene.document.Field("abs", 
-                                                 abstr, 
-                               org.apache.lucene.document.Field.Store.YES,
-                               org.apache.lucene.document.Field.Index.ANALYZED);
+                org.apache.lucene.document.TextField("abs", abstr, 
+                    org.apache.lucene.document.Field.Store.YES);
 
         doc.add(mfnFld);
         doc.add(titFld);
@@ -98,16 +90,16 @@ public class GenLilacsIndex {
             usage();
         }*/
         
-        final String lilPath = "/home/heitor/Projetos/previousTerm_Lucene5_4/LILACS"; //args[0];
+        final String lilPath = "LILACS"; //args[0];
         final String outDir = "lilacs"; //args[1];
         
         final Master mst = MasterFactory.getInstance(lilPath).open();
         //final Reader reader = new FileReader("ALL_StopWords.txt");
-        final Analyzer analyzer = new StandardAnalyzer(Version.LUCENE_36);
+        final Analyzer analyzer = new StandardAnalyzer();
                                                                             
-        final Directory directory = new SimpleFSDirectory(new File(outDir));
-        final IndexWriterConfig conf = new IndexWriterConfig(Version.LUCENE_36, 
-                                                             analyzer);
+        final Directory directory = new SimpleFSDirectory(new File(outDir)
+                                                                     .toPath());
+        final IndexWriterConfig conf = new IndexWriterConfig(analyzer);
         final IndexWriter iwriter = new IndexWriter(directory, conf);
         int cur = 0;
         

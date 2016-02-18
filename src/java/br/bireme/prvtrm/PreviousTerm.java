@@ -29,12 +29,14 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import org.apache.lucene.index.DirectoryReader;
 import org.apache.lucene.index.IndexReader;
-import org.apache.lucene.index.Term;
-import org.apache.lucene.index.TermEnum;
+import org.apache.lucene.index.MultiFields;
+import org.apache.lucene.index.Terms;
+import org.apache.lucene.index.TermsEnum;
 import org.apache.lucene.store.Directory;
 import org.apache.lucene.store.SimpleFSDirectory;
-import org.apache.lucene.util.ReaderUtil;
+import org.apache.lucene.util.BytesRef;
 
 /**
  * Esta classe retorna um número determinados de chaves do índice do Lucene
@@ -46,10 +48,10 @@ import org.apache.lucene.util.ReaderUtil;
  */
 public class PreviousTerm {  
     private class Tum {
-        private final TermEnum tenum;
-        private final String field;
-        private String cur;
+        private final IndexReader reader;
+        private final TermsEnum tenum;
         private boolean eof;
+        private String cur;
 
         Tum(final String sdir,
             final String field,
@@ -58,17 +60,26 @@ public class PreviousTerm {
             assert field != null;
             assert term != null;
 
-            final IndexReader reader = getIndexReader(sdir);
+            this.reader = getIndexReader(sdir);
+            final Terms terms = MultiFields.getTerms(reader, field.trim());
             
-            this.field = field.trim();
-            cur = term;
-            tenum = reader.terms(new Term(this.field, term));
-            eof = false;
-            getInitialNext();
+            if (terms == null) {
+                throw new IOException("Invalid field: " + field);
+            }
+                        
+            tenum = terms.iterator();          
+                        
+            if (tenum.seekCeil(new BytesRef(term.trim())) 
+                                                  == TermsEnum.SeekStatus.END) {
+                eof = true;
+            } else {
+                eof = false;
+            }
+            cur = null;
         }
 
         void close() throws IOException {
-            tenum.close();
+            reader.close();
         }
 
         boolean hasNext() {
@@ -76,48 +87,26 @@ public class PreviousTerm {
         }
 
         String next() throws IOException {
-            final String ret = cur;
-//System.out.print("hasNext=" + hasNext());
-            getNext();
-//System.out.println(" cur=" + cur + " hasNext=" + hasNext());
+            if (eof) {
+                throw new IOException("end of iterator found");
+            }
+            final String ret = tenum.term().utf8ToString();
+            cur = ret;
+            eof = (tenum.next() == null);
+
             return ret;
         }
-
-        String current() {
-            return cur;
-        }
-
-        private String getInitialNext() throws IOException {
-            final Term trm = tenum.term();
-            if ((trm == null) || (!trm.field().equals(field))) {
-                eof = true;
-                cur = null;
-            } else {
-                eof = false;
-                cur = trm.text();
-                tenum.next();                    
-            }
-
-            return cur;
-        }
         
-        private String getNext() throws IOException {
-            if (hasNext()) {
-                final Term trm = tenum.term();
-                if ((trm == null) || (!trm.field().equals(field))) {
-                    eof = true;
-                    cur = null;
-                } else {
-                    cur = trm.text();
-                    tenum.next();
-                    final Term trm1 = tenum.term();
-                    eof = ((trm1 == null) || (!trm1.field().equals(field)));
-                }
+        String current() throws IOException {
+            final String current;
+            
+            if (cur == null) {
+                current = eof ? null : next();
             } else {
-                cur = null;
+                current = cur;
             }
-
-            return cur;
+            
+            return current;
         }
     }
 
@@ -126,8 +115,7 @@ public class PreviousTerm {
         final Set<Tum> lte;
         String cur;
         boolean first;
-
-int count;
+        final String max;
 
         NextTerms(final String sdir,
                   final Set<String> fields,
@@ -138,13 +126,13 @@ int count;
 
             this.fields = fields;
             lte = new HashSet<Tum>();
-            cur = term;
+            cur = term.trim();
             first = true;
+            max = new Character(Character.MAX_VALUE).toString();
 
             for (String fld : fields) {
                 lte.add(new Tum(sdir, fld, term));
-            }
-count=0;            
+            }            
         }
 
         void close() throws IOException {
@@ -157,8 +145,7 @@ count=0;
             boolean ret = false;
 
             for (Tum tum : lte) {
-                //if (tum.hasNext()) {
-                if (tum.current() != null) {
+                if (tum.hasNext()) {               
                     ret = true;
                     break;
                 }
@@ -167,23 +154,23 @@ count=0;
             return ret;
         }
 
-        String next() throws IOException {
-            final String max = new Character(Character.MAX_VALUE).toString();
+        String next() throws IOException {            
             String min = max;
 
             for (Tum tum : lte) {                
-                String tcur = null;
-                while (true) {
-                    tcur = tum.current();                    
-System.out.println("count=" + (++count) + " ttcur=" + tcur);                    
+                String tcur = tum.current();
+                
+                while (true) {                
                     if (tcur == null) {
                         break;
                     } else if (first && tcur.compareTo(cur) >= 0) {
                         break;
                     } else if (tcur.compareTo(cur) > 0) {
                         break;
-                    }               
-                    tum.next();
+                    } else if (!tum.hasNext()) {
+                        break;
+                    }
+                    tcur = tum.next();
                 } 
                 if ((tcur != null) && (tcur.compareTo(min) < 0)) {
                     min = tcur;
@@ -191,7 +178,7 @@ System.out.println("count=" + (++count) + " ttcur=" + tcur);
             }
             cur = min.equals(max) ? null : min;
             first = false;
-System.out.println("==> " + cur);
+//System.out.println("==> " + cur);
             return cur;
         }
     }
@@ -249,27 +236,17 @@ System.out.println("==> " + cur);
         
         for (Map.Entry<String,String> entry : info.entrySet()) {            
             final Directory sdir = new SimpleFSDirectory(
-                                                    new File(entry.getValue()));
-            final IndexReader reader = IndexReader.open(sdir);
+                                           new File(entry.getValue()).toPath());
+            final IndexReader reader = DirectoryReader.open(sdir);
             final String key = entry.getKey();
             final HashSet<String> fset = new HashSet<String>();
             
             this.readers.put(key, reader);
             this.fields.put(key, fset);
             
-            for (String fname : ReaderUtil.getIndexedFields(reader)) {
+            for (String fname : MultiFields.getFields(reader)) {
                 fset.add(fname);
-                //System.out.println("[" + fname + "]");
-            }
-            //reader.close();
-            //final Iterator<FieldInfo> fiterator = reader.getFieldInfos().iterator();
-            //final Iterator<FieldInfo> fiterator =  
-                              //ReaderUtil.getMergedFieldInfos(reader).iterator();
-            //while (fiterator.hasNext()) {            
-            //    final FieldInfo finfo = fiterator.next();
-            //    fset.add(finfo.name);
-//System.out.println("[" + finfo.name + "]");                
-            //}
+            }        
         }                        
     }
 
@@ -318,7 +295,7 @@ System.out.println("==> " + cur);
             ret.add(initX);
             mSize--;
         }
-        nterms.close();
+        //nterms.close();
 
         for (int tot = 0; tot < mSize; tot++) {
             final String prev = getPreviousTerm(sdir, initX, fields);
@@ -329,7 +306,7 @@ System.out.println("==> " + cur);
             ret.add(prev);
             initX = prev;
         }
-
+        
         return ret;
     }
 
@@ -442,7 +419,6 @@ System.out.println("==> " + cur);
                                   ? first + (char)(Character.MAX_VALUE / 2)
                                   : med);
             } else {
-                //ret = current.substring(0, clen/2);
                 ret = current.substring(0, clen - 1);
             }
         } else {
@@ -553,7 +529,7 @@ System.out.println("==> " + cur);
                 ret.add(next);
             }
         }
-        nterms.close();
+        //nterms.close();
 
         return ret;
     }
