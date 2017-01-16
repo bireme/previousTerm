@@ -18,6 +18,9 @@
         given term.</p>
         <p>Get parameters are:</p>
         <p>index=&lt;Lucene index name&gt; <br/>init=&lt;initial key&gt; <br/>fields=&lt;field1,field2,...&gt; <br/>[direction=&lt;'next' or 'previous'&gt;] <br/>[maxTerms=&lt;max returned keys&gt;]</p>
+        <p>Other parameters are:</p>
+        <p>verbose=   - shows exception message</p>
+        <p>info=      - shows instalation/indexes information
         <p>Example:</p>
         <p>/PreviousTermServlet?index=lil&init=baar&direction=previous&fields=tit,abs</p>
     </body>

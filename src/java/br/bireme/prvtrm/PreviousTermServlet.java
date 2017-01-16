@@ -53,8 +53,10 @@ import org.json.simple.JSONObject;
 public class PreviousTermServlet extends HttpServlet {
 
     private static final Logger logger = LogManager.getLogger(PreviousTermServlet.class);
+    private String maxTerms;
+    private Map<String,String> iinfo;
     private PreviousTerm previous;
-
+  
     /**
      * INDEX_DIR diretorio contendo o indice Lucene
      * MAX_TERMS numero maximo de termos a serem retornados
@@ -67,19 +69,18 @@ public class PreviousTermServlet extends HttpServlet {
     public void init(final ServletConfig servletConfig)
                                                        throws ServletException {
         try {
-            final String maxTerms = servletConfig.getInitParameter("MAX_TERMS");
+            maxTerms = servletConfig.getInitParameter("MAX_TERMS");
             if (maxTerms == null) {
                 throw new ServletException("missing maximum number of returned "
                                               + "terms (MAX_TERMS) parameter.");
             }
-            final String indexes = servletConfig.getInitParameter(
-                                                              "LUCENE_INDEXES");
+            final String indexes = servletConfig.getInitParameter("LUCENE_INDEXES");
             if (indexes == null) {
                 throw new ServletException(
                              "missing LUCENE_INDEXES configuration parameter.");
             }
-            previous = new PreviousTerm(getIndexInfo(indexes),
-                                        Integer.parseInt(maxTerms));
+            iinfo = getIndexInfo(indexes);
+            previous = new PreviousTerm(iinfo, Integer.parseInt(maxTerms));
         } catch (Exception ex) {
             logger.catching(Level.ERROR, ex);
             throw new ServletException(ex);
@@ -100,6 +101,40 @@ public class PreviousTermServlet extends HttpServlet {
         }
         return infol;
     }
+    
+    private void info(final HttpServletRequest request,
+                      final HttpServletResponse response)
+                                          throws ServletException, IOException {
+        PrintWriter out = null;
+        
+        try {
+            response.setContentType("text/html; charset=UTF-8");
+            out = response.getWriter();
+            
+            out.println("<html>");
+            out.println("<head><title>PreviousTerm Info</title></head>");
+            out.println("<body>");
+            out.println("<h1>PreviousTerm Info</h1>");
+            out.println("<p>Host:" + request.getServerName() + "</p>");
+            out.println("<p>Port:" + request.getServerPort() + "</p>");
+            out.println("<p>Indexes:</p>");
+            out.println("<table><tr><th>name></th><th>path</th><th>fields</th></tr>");
+            for (Map.Entry<String,String> entry: iinfo.entrySet()) {
+                out.println("<tr><td>" + entry.getKey() + "</td><td>" +
+                            entry.getValue() + "</td><td>");
+                for (String fld: Tools.getDocFields(entry.getValue())) {
+                    out.println(fld + " ");
+                }
+                out.println("</td></tr>");
+            }
+            out.println("</table>");
+            out.println("</body></html>");
+        } finally {
+            if (out != null) {
+                out.close();
+            }
+        }
+    }
 
     /**
      * Processes requests for both HTTP
@@ -115,11 +150,19 @@ public class PreviousTermServlet extends HttpServlet {
                                   final HttpServletResponse response)
                                           throws ServletException, IOException {                         
         PrintWriter out = null;
+        String verbose = null;
+        
+        if (request.getParameter("info") != null) {
+            info(request, response);
+            return;
+        }
         
         try {
             response.setContentType("application/json; charset=UTF-8");
             out = response.getWriter();
-            
+ 
+            verbose = request.getParameter("verbose");
+
             final String index = request.getParameter("index");
             if (index == null) {
                 throw new ServletException("missing 'index' parameter");
@@ -178,7 +221,11 @@ public class PreviousTermServlet extends HttpServlet {
         } catch (Exception ex) {
             logger.catching(Level.ERROR, ex);                        
             if (out != null) {
-                out.println("{}");
+                if (verbose == null) {
+                    out.println("{}");
+                } else {
+                    out.println("{Exception:\"" + ex.toString() + "\"}");
+                }
             }
         } finally {
             if (out != null) {
