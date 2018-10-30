@@ -1,23 +1,9 @@
 /*=========================================================================
 
-    Copyright © 2012 BIREME/PAHO/WHO
+    previousTerm © Pan American Health Organization, 2018.
+    See License at: https://github.com/bireme/previousTerm/blob/master/LICENSE.txt
 
-    This file is part of PreviousTerm servlet.
-
-    PreviousTerm is free software: you can redistribute it and/or modify
-    it under the terms of the GNU Lesser General Public License as
-    published by the Free Software Foundation, either version 3 of
-    the License, or (at your option) any later version.
-
-    PreviousTerm is distributed in the hope that it will be useful,
-    but WITHOUT ANY WARRANTY; without even the implied warranty of
-    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-    GNU Lesser General Public License for more details.
-
-    You should have received a copy of the GNU Lesser General Public
-    License along with PreviousTerm. If not, see <http://www.gnu.org/licenses/>.
-
-=========================================================================*/
+  ==========================================================================*/
 
 package br.bireme.prvtrm;
 
@@ -56,7 +42,7 @@ public class PreviousTermServlet extends HttpServlet {
     private String maxTerms;
     private Map<String,String> iinfo;
     private PreviousTerm previous;
-  
+
     /**
      * INDEX_DIR diretorio contendo o indice Lucene
      * MAX_TERMS numero maximo de termos a serem retornados
@@ -86,31 +72,31 @@ public class PreviousTermServlet extends HttpServlet {
             throw new ServletException(ex);
         }
     }
-    
+
     // [name="<index name>" path="<index path>"]
     private Map<String,String> getIndexInfo(final String in) {
         assert in != null;
-        
+
         final Map<String,String> infol = new HashMap<String,String>();
         final Matcher mat = Pattern.compile(
          "\\[\\s*name\\s*=\\s*\"([^\"]+)\"\\s+path\\s*=\\s*\"([^\"]+)\"\\s*\\]")
                                                                    .matcher(in);
-                
+
         while (mat.find()) {
             infol.put(mat.group(1), mat.group(2));
         }
         return infol;
     }
-    
+
     private void info(final HttpServletRequest request,
                       final HttpServletResponse response)
                                           throws ServletException, IOException {
         PrintWriter out = null;
-        
+
         try {
             response.setContentType("text/html; charset=UTF-8");
             out = response.getWriter();
-            
+
             out.println("<html>");
             out.println("<head><title>PreviousTerm Info</title></head>");
             out.println("<body>");
@@ -148,19 +134,19 @@ public class PreviousTermServlet extends HttpServlet {
      */
     protected void processRequest(final HttpServletRequest request,
                                   final HttpServletResponse response)
-                                          throws ServletException, IOException {                         
+                                          throws ServletException, IOException {
         PrintWriter out = null;
         String verbose = null;
-        
+
         if (request.getParameter("info") != null) {
             info(request, response);
             return;
         }
-        
+
         try {
             response.setContentType("application/json; charset=UTF-8");
             out = response.getWriter();
- 
+
             verbose = request.getParameter("verbose");
 
             final String index = request.getParameter("index");
@@ -172,10 +158,10 @@ public class PreviousTermServlet extends HttpServlet {
             if (init == null) {
                 throw new ServletException("missing 'init' parameter");
             }
-            
+
             final String maxTerms = request.getParameter("maxTerms");
             final int maxSize = (maxTerms == null) ? previous.getMaxSize()
-                                                   : Integer.parseInt(maxTerms);            
+                                                   : Integer.parseInt(maxTerms);
 
             final String sfields = request.getParameter("fields");
             final Set<String> fields;
@@ -217,9 +203,9 @@ public class PreviousTermServlet extends HttpServlet {
             jobj.put("terms", jlistTerms);
 
             out.println(jobj.toJSONString());
-            
+
         } catch (Exception ex) {
-            logger.catching(Level.ERROR, ex);                        
+            logger.catching(Level.ERROR, ex);
             if (out != null) {
                 if (verbose == null) {
                     out.println("{}");
@@ -233,7 +219,7 @@ public class PreviousTermServlet extends HttpServlet {
             }
         }
 }
-    
+
     // <editor-fold defaultstate="collapsed" desc="HttpServlet methods. Click on the + sign on the left to edit the code.">
     /**
      * Handles the HTTP

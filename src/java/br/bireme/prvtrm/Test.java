@@ -1,3 +1,10 @@
+/*=========================================================================
+
+    previousTerm © Pan American Health Organization, 2018.
+    See License at: https://github.com/bireme/previousTerm/blob/master/LICENSE.txt
+
+  ==========================================================================*/
+
 package br.bireme.prvtrm;
 
 import java.io.IOException;
@@ -16,13 +23,13 @@ public class Test {
 
     public static void main(String[] args) throws IOException {
         final int size = 100; //50000;
-        final Map<String,String> info = new HashMap();
+        final Map<String,String> info = new HashMap<String,String>();
         info.put("lil", "/home/heitor/Projetos/DocumentSimilarity/lil");
         final Set<String> fields = new HashSet<String>();
         fields.add("tit");
         fields.add("abs");
         final PreviousTerm prev = new PreviousTerm(info, size);
-        
+
         List<String> prevs;
 
         String start = "cadit"; //"cabíveis";//"cac"; //"cacinoma";

@@ -1,4 +1,11 @@
 <%-- 
+=========================================================================
+
+    previousTerm © Pan American Health Organization, 2018.
+    See License at: https://github.com/bireme/previousTerm/blob/master/LICENSE.txt
+
+  ==========================================================================
+
     Document   : index
     Created on : 29/11/2012, 12:24:00
     Author     : Heitor Barbieri
@@ -13,7 +20,7 @@
     </head>
     <body>
         <h1>Previous Term Servlet</h1>
-        
+
         <p>Retrives n (next/previous) terms from a Lucene Index starting from a
         given term.</p>
         <p>Get parameters are:</p>

@@ -1,23 +1,9 @@
 /*=========================================================================
 
-    Copyright © 2012 BIREME/PAHO/WHO
+    previousTerm © Pan American Health Organization, 2018.
+    See License at: https://github.com/bireme/previousTerm/blob/master/LICENSE.txt
 
-    This file is part of PreviousTerm servlet.
-
-    PreviousTerm is free software: you can redistribute it and/or modify
-    it under the terms of the GNU Lesser General Public License as
-    published by the Free Software Foundation, either version 3 of
-    the License, or (at your option) any later version.
-
-    PreviousTerm is distributed in the hope that it will be useful,
-    but WITHOUT ANY WARRANTY; without even the implied warranty of
-    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-    GNU Lesser General Public License for more details.
-
-    You should have received a copy of the GNU Lesser General Public
-    License along with PreviousTerm. If not, see <http://www.gnu.org/licenses/>.
-
-=========================================================================*/
+  ==========================================================================*/
 
 package br.bireme.prvtrm;
 
@@ -42,7 +28,7 @@ import org.apache.lucene.store.SimpleFSDirectory;
  * date: 20150827
  */
 public class Tools {
-    public static Set<String> getDocFields(final String sdir) 
+    public static Set<String> getDocFields(final String sdir)
                                                             throws IOException {
         if (sdir == null) {
             throw new NullPointerException("sdir");
@@ -51,14 +37,14 @@ public class Tools {
         final Directory sfsdir = new SimpleFSDirectory(new File(sdir).toPath());
         final IndexReader reader = DirectoryReader.open(sfsdir);
         final Fields fields = MultiFields.getFields(reader);
-            
+
         for (String name : fields) {
             set.add(name);
         }
-        
+
         return set;
     }
-    
+
     public static Set<String> getNextTerms(final String sdir,
                                            final String fldName,
                                            final String from,
@@ -77,36 +63,36 @@ public class Tools {
         }
         final Map<String,String> map = new HashMap<String,String>();
         map.put("index", sdir);
-        
+
         final PreviousTerm pterm = new PreviousTerm(map, count+1);
-        
+
         final Set<String> set = new HashSet<String>();
         set.add(fldName);
         final List<String> lst = pterm.getNextTerms("index", from, set, count);
-        
+
         pterm.close();
-        
+
         return new TreeSet<String>(lst);
     }
-        
+
     private static void usage() {
         System.err.println("usage: Tools <dir> " +
                                           "[-show=<fieldName>,<from>,<count>]");
         System.exit(1);
     }
-    
+
     public static void main(final String[] args) throws IOException {
         if (args.length < 1) {
             usage();
         }
-        
+
         for (String field : getDocFields(args[0])) {
             System.out.println("field: [" + field + "]");
         }
         System.out.println(args.length);
         if (args.length > 1) {
             System.out.println();
-            
+
             if (args[1].startsWith("-show=")) {
                 final String[] split = args[1].substring(6).split(" *, *");
                 if (split.length != 3) {

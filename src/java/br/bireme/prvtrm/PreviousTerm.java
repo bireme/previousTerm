@@ -1,23 +1,9 @@
 /*=========================================================================
 
-    Copyright © 2012 BIREME/PAHO/WHO
+    previousTerm © Pan American Health Organization, 2018.
+    See License at: https://github.com/bireme/previousTerm/blob/master/LICENSE.txt
 
-    This file is part of PreviousTerm servlet.
-
-    PreviousTerm is free software: you can redistribute it and/or modify
-    it under the terms of the GNU Lesser General Public License as
-    published by the Free Software Foundation, either version 3 of
-    the License, or (at your option) any later version.
-
-    PreviousTerm is distributed in the hope that it will be useful,
-    but WITHOUT ANY WARRANTY; without even the implied warranty of
-    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-    GNU Lesser General Public License for more details.
-
-    You should have received a copy of the GNU Lesser General Public
-    License along with PreviousTerm. If not, see <http://www.gnu.org/licenses/>.
-
-=========================================================================*/
+  ==========================================================================*/
 
 package br.bireme.prvtrm;
 
@@ -42,11 +28,11 @@ import org.apache.lucene.util.BytesRef;
  * Esta classe retorna um número determinados de chaves do índice do Lucene
  * que são menores (previos) ou maiores (seguintes) que uma determinada
  * chave.
- * 
+ *
  * @author Heitor Barbieri
  * date: 20121123
  */
-public class PreviousTerm {  
+public class PreviousTerm {
     private class Tum {
         private final IndexReader reader;
         private final TermsEnum tenum;
@@ -62,14 +48,14 @@ public class PreviousTerm {
 
             this.reader = getIndexReader(sdir);
             final Terms terms = MultiFields.getTerms(reader, field.trim());
-            
+
             if (terms == null) {
                 throw new IOException("Invalid field: " + field);
             }
-                        
-            tenum = terms.iterator();          
-                        
-            if (tenum.seekCeil(new BytesRef(term.trim())) 
+
+            tenum = terms.iterator();
+
+            if (tenum.seekCeil(new BytesRef(term.trim()))
                                                   == TermsEnum.SeekStatus.END) {
                 eof = true;
             } else {
@@ -96,16 +82,16 @@ public class PreviousTerm {
 
             return ret;
         }
-        
+
         String current() throws IOException {
             final String current;
-            
+
             if (cur == null) {
                 current = eof ? null : next();
             } else {
                 current = cur;
             }
-            
+
             return current;
         }
     }
@@ -132,7 +118,7 @@ public class PreviousTerm {
 
             for (String fld : fields) {
                 lte.add(new Tum(sdir, fld, term));
-            }            
+            }
         }
 
         void close() throws IOException {
@@ -145,7 +131,7 @@ public class PreviousTerm {
             boolean ret = false;
 
             for (Tum tum : lte) {
-                if (tum.hasNext()) {               
+                if (tum.hasNext()) {
                     ret = true;
                     break;
                 }
@@ -154,13 +140,13 @@ public class PreviousTerm {
             return ret;
         }
 
-        String next() throws IOException {            
+        String next() throws IOException {
             String min = max;
 
-            for (Tum tum : lte) {                
+            for (Tum tum : lte) {
                 String tcur = tum.current();
-                
-                while (true) {                
+
+                while (true) {
                     if (tcur == null) {
                         break;
                     } else if (first && tcur.compareTo(cur) >= 0) {
@@ -171,7 +157,7 @@ public class PreviousTerm {
                         break;
                     }
                     tcur = tum.next();
-                } 
+                }
                 if ((tcur != null) && (tcur.compareTo(min) < 0)) {
                     min = tcur;
                 }
@@ -183,7 +169,7 @@ public class PreviousTerm {
         }
     }
 
-    private final Map<String,String> info;    
+    private final Map<String,String> info;
     private final int maxSize;
     private HashMap<String,IndexReader> readers;
     private HashMap<String,Set<String>> fields;
@@ -194,28 +180,28 @@ public class PreviousTerm {
 
     public Set<String> getFields(final String index) {
         final Set<String> set;
-        
+
         if (index == null) {
             set = null;
         } else {
             final Set<String> cset = fields.get(index);
             set = (cset == null) ? null: new HashSet<String>(fields.get(index));
         }
-        
+
         return set;
     }
-    
+
     public int getMaxSize() {
         return maxSize;
     }
-    
+
     public Set<String> getIndexes() {
         return new HashSet<String>(info.keySet());
     }
-    
+
     /**
      * Construtor da classe
-     * @param info conjunto de  nomes e caminhos dos indices Lucene a 
+     * @param info conjunto de  nomes e caminhos dos indices Lucene a
      * serem utilizados
      * @param maxSize numero de termos previos a serem retornados
      * @throws IOException
@@ -231,23 +217,23 @@ public class PreviousTerm {
 
         this.info = info;
         this.maxSize = maxSize;
-        this.readers = new HashMap<String,IndexReader>(); 
+        this.readers = new HashMap<String,IndexReader>();
         this.fields = new HashMap<String,Set<String>>();
-        
-        for (Map.Entry<String,String> entry : info.entrySet()) {            
+
+        for (Map.Entry<String,String> entry : info.entrySet()) {
             final Directory sdir = new SimpleFSDirectory(
                                            new File(entry.getValue()).toPath());
             final IndexReader reader = DirectoryReader.open(sdir);
             final String key = entry.getKey();
             final HashSet<String> fset = new HashSet<String>();
-            
+
             this.readers.put(key, reader);
             this.fields.put(key, fset);
-            
+
             for (String fname : MultiFields.getFields(reader)) {
                 fset.add(fname);
-            }        
-        }                        
+            }
+        }
     }
 
     /**
@@ -258,8 +244,8 @@ public class PreviousTerm {
         for (IndexReader reader: readers.values()) {
             reader.close();
         }
-    }   
-        
+    }
+
     /**
      * Encontra os termos previos de um indice em relacao ao termo inicial
      * @param sdir nome do indice lucene a ser utilizado
@@ -285,7 +271,7 @@ public class PreviousTerm {
         if (maxSize <= 0) {
             throw new IOException("invalid maxSize [" + maxSize + "]");
         }
-        
+
         final List<String> ret = new ArrayList<String>();
         int mSize = maxSize;
         String initX = init;
@@ -306,26 +292,26 @@ public class PreviousTerm {
             ret.add(prev);
             initX = prev;
         }
-        
+
         return ret;
     }
 
     /**
-     * 
+     *
      * @param index nome do diretorio onde esta o indice Lucene a ser lido
      * @return um objeto IndexReader em cache ou cria um novo
      */
     private IndexReader getIndexReader(final String index) throws IOException {
         assert index != null;
-        
+
         final IndexReader reader = readers.get(index);
         if (reader == null) {
             throw new IOException("invalid index name: " + index);
         }
-        
+
         return reader;
     }
-    
+
     /**
      * Encontra o termo previo em relacao ao termo inicial
      * @param sdir nome do indice lucene a ser utilizado
@@ -356,8 +342,8 @@ public class PreviousTerm {
             if (previousWord == null) {
                 ret = null;
                 break;
-            }            
-            final List<String> nextWords = 
+            }
+            final List<String> nextWords =
                                 getNextTerms(sdir, previousWord, fields, RANGE);
             if (nextWords.isEmpty()) {
                 if (totGetNext++ > MAXTOTFIRSTPOS) {
@@ -367,7 +353,7 @@ public class PreviousTerm {
                 initX = previousWord;
             } else {
                 final String last = nextWords.get(nextWords.size() - 1);
-                if (last.compareTo(initX) < 0) {    
+                if (last.compareTo(initX) < 0) {
                     lowerBound = last;              // init esta em um bloco adiante
                 } else {
                     int idx = 0;
@@ -403,7 +389,7 @@ public class PreviousTerm {
      * @return uma string anterior menor que a 'current' mas maior que 'lastGuess'
      */
     private String guessPreviousWord(final String current,
-                                     final String lastGuess) {        
+                                     final String lastGuess) {
         assert current != null;
         assert (lastGuess == null) ? true : (current.compareTo(lastGuess) > 0)
                                                     : current + ">" + lastGuess;
@@ -488,7 +474,7 @@ public class PreviousTerm {
         return ret;
     }
 
-    //==========================================================================    
+    //==========================================================================
     /**
      *  Retorna os proximos 'maxSize' termos do indice a partir de 'init'
      * @param sdir nome do indice lucene a ser utilizado
