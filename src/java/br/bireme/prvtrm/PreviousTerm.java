@@ -21,7 +21,7 @@ import org.apache.lucene.index.MultiFields;
 import org.apache.lucene.index.Terms;
 import org.apache.lucene.index.TermsEnum;
 import org.apache.lucene.store.Directory;
-import org.apache.lucene.store.SimpleFSDirectory;
+import org.apache.lucene.store.FSDirectory;
 import org.apache.lucene.util.BytesRef;
 
 /**
@@ -47,7 +47,10 @@ public class PreviousTerm {
             assert term != null;
 
             this.reader = getIndexReader(sdir);
-            final Terms terms = MultiFields.getTerms(reader, field.trim());
+            
+            //final Terms terms0 = MultiTerms.getTerms(reader, field);
+            //final Terms terms = MultiTerms.getTerms(this.reader, field.trim()); // Lucene current version
+            final Terms terms = MultiFields.getTerms(this.reader, field.trim());  // Lucene 5.4.1 and 4.0.0
 
             if (terms == null) {
                 throw new IOException("Invalid field: " + field);
@@ -55,12 +58,8 @@ public class PreviousTerm {
 
             tenum = terms.iterator();
 
-            if (tenum.seekCeil(new BytesRef(term.trim()))
-                                                  == TermsEnum.SeekStatus.END) {
-                eof = true;
-            } else {
-                eof = false;
-            }
+            eof = tenum.seekCeil(new BytesRef(term.trim()))
+                                                  == TermsEnum.SeekStatus.END;
             cur = null;
         }
 
@@ -111,10 +110,11 @@ public class PreviousTerm {
             assert term != null;
 
             this.fields = fields;
-            lte = new HashSet<Tum>();
+            lte = new HashSet<>();
             cur = term.trim();
             first = true;
-            max = new Character(Character.MAX_VALUE).toString();
+            //max = new Character(Character.MAX_VALUE).toString();
+            max = Character.valueOf(Character.MAX_VALUE).toString();
 
             for (String fld : fields) {
                 lte.add(new Tum(sdir, fld, term));
@@ -172,23 +172,9 @@ public class PreviousTerm {
     private final Map<String,String> info;
     private final int maxSize;
     private HashMap<String,IndexReader> readers;
-    private HashMap<String,Set<String>> fields;
 
     public Map<String,String> getInfo() {
-        return new HashMap<String,String>(info);
-    }
-
-    public Set<String> getFields(final String index) {
-        final Set<String> set;
-
-        if (index == null) {
-            set = null;
-        } else {
-            final Set<String> cset = fields.get(index);
-            set = (cset == null) ? null: new HashSet<String>(fields.get(index));
-        }
-
-        return set;
+        return new HashMap<>(info);
     }
 
     public int getMaxSize() {
@@ -196,7 +182,7 @@ public class PreviousTerm {
     }
 
     public Set<String> getIndexes() {
-        return new HashSet<String>(info.keySet());
+        return new HashSet<>(info.keySet());
     }
 
     /**
@@ -217,22 +203,15 @@ public class PreviousTerm {
 
         this.info = info;
         this.maxSize = maxSize;
-        this.readers = new HashMap<String,IndexReader>();
-        this.fields = new HashMap<String,Set<String>>();
+        this.readers = new HashMap<>();
 
         for (Map.Entry<String,String> entry : info.entrySet()) {
-            final Directory sdir = new SimpleFSDirectory(
+            final Directory sdir = FSDirectory.open(
                                            new File(entry.getValue()).toPath());
             final IndexReader reader = DirectoryReader.open(sdir);
             final String key = entry.getKey();
-            final HashSet<String> fset = new HashSet<String>();
 
             this.readers.put(key, reader);
-            this.fields.put(key, fset);
-
-            for (String fname : MultiFields.getFields(reader)) {
-                fset.add(fname);
-            }
         }
     }
 
@@ -272,7 +251,7 @@ public class PreviousTerm {
             throw new IOException("invalid maxSize [" + maxSize + "]");
         }
 
-        final List<String> ret = new ArrayList<String>();
+        final List<String> ret = new ArrayList<>();
         int mSize = maxSize;
         String initX = init;
 
@@ -502,7 +481,7 @@ public class PreviousTerm {
             throw new IOException("invalid maxSize");
         }
 
-        final List<String> ret = new ArrayList<String>();
+        final List<String> ret = new ArrayList<>();
         final NextTerms nterms = new NextTerms(sdir, fields, init);
         int total = 0;
 

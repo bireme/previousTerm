@@ -20,7 +20,7 @@ import org.apache.lucene.document.Document;
 import org.apache.lucene.index.IndexWriter;
 import org.apache.lucene.index.IndexWriterConfig;
 import org.apache.lucene.store.Directory;
-import org.apache.lucene.store.SimpleFSDirectory;
+import org.apache.lucene.store.FSDirectory;
 
 /**
  *
@@ -37,6 +37,7 @@ public class GenLilacsIndex {
                                       final Record rec)
                                             throws BrumaException, IOException {
         String title = "[empty]";
+        String title2 = null;
         String abstr = "[empty]";
 
         Field fld = rec.getField(12, 1);
@@ -44,6 +45,11 @@ public class GenLilacsIndex {
             title = fld.getContent();
             if ((title == null) || (title.isEmpty())) {
                 title = "[empty]";
+            } else {
+                final String[] split = title.trim().split(" +", 3);
+                if (split.length >= 2) {
+                   title2 = split[0] + " " + split[1]; 
+                }
             }
         }
         fld = rec.getField(83, 1);
@@ -67,6 +73,14 @@ public class GenLilacsIndex {
         doc.add(mfnFld);
         doc.add(titFld);
         doc.add(absFld);
+        if (title2 != null) {
+            final org.apache.lucene.document.Field titFld2 = new
+                org.apache.lucene.document.StringField("tit2", 
+                    title2.toLowerCase(),
+                    org.apache.lucene.document.Field.Store.YES);
+            doc.add(titFld2);
+
+        }
         iwriter.addDocument(doc);
     }
 
@@ -76,14 +90,14 @@ public class GenLilacsIndex {
             usage();
         }*/
 
-        final String lilPath = "LILACS"; //args[0];
+        final String lilPath = "LILACS/lilacs"; //args[0];
         final String outDir = "lilacs"; //args[1];
 
         final Master mst = MasterFactory.getInstance(lilPath).open();
         //final Reader reader = new FileReader("ALL_StopWords.txt");
         final Analyzer analyzer = new StandardAnalyzer();
 
-        final Directory directory = new SimpleFSDirectory(new File(outDir)
+        final Directory directory = FSDirectory.open(new File(outDir)
                                                                      .toPath());
         final IndexWriterConfig conf = new IndexWriterConfig(analyzer);
         final IndexWriter iwriter = new IndexWriter(directory, conf);

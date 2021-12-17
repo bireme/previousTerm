@@ -38,7 +38,7 @@ import org.json.simple.JSONObject;
                                                        {"/PreviousTermServlet"})
 public class PreviousTermServlet extends HttpServlet {
 
-    private static final Logger logger = LogManager.getLogger(PreviousTermServlet.class);
+    private final Logger logger = LogManager.getLogger(PreviousTermServlet.class);
     private String maxTerms;
     private Map<String,String> iinfo;
     private PreviousTerm previous;
@@ -104,14 +104,10 @@ public class PreviousTermServlet extends HttpServlet {
             out.println("<p>Host:" + request.getServerName() + "</p>");
             out.println("<p>Port:" + request.getServerPort() + "</p>");
             out.println("<p>Indexes:</p>");
-            out.println("<table><tr><th>name></th><th>path</th><th>fields</th></tr>");
+            out.println("<table><tr><th>name></th><th>path</th></tr>");
             for (Map.Entry<String,String> entry: iinfo.entrySet()) {
                 out.println("<tr><td>" + entry.getKey() + "</td><td>" +
-                            entry.getValue() + "</td><td>");
-                for (String fld: Tools.getDocFields(entry.getValue())) {
-                    out.println(fld + " ");
-                }
-                out.println("</td></tr>");
+                            entry.getValue() + "</td></tr>");
             }
             out.println("</table>");
             out.println("</body></html>");
@@ -159,9 +155,9 @@ public class PreviousTermServlet extends HttpServlet {
                 throw new ServletException("missing 'init' parameter");
             }
 
-            final String maxTerms = request.getParameter("maxTerms");
-            final int maxSize = (maxTerms == null) ? previous.getMaxSize()
-                                                   : Integer.parseInt(maxTerms);
+            final String maxTermsStr = request.getParameter("maxTerms");
+            final int maxSize = (maxTermsStr == null) ? previous.getMaxSize()
+                                                : Integer.parseInt(maxTermsStr);
 
             final String sfields = request.getParameter("fields");
             final Set<String> fields;
@@ -170,10 +166,6 @@ public class PreviousTermServlet extends HttpServlet {
             } else {
                 fields = new HashSet<String>(
                         Arrays.asList(sfields.trim().split(" *[\\,\\;] *")));
-                final Set<String> fldSet = previous.getFields(index);
-                if ((fldSet == null) || (!fldSet.containsAll(fields))) {
-                   throw new ServletException("invalid fields:" + sfields);
-                }
             }
 
             final List<String> terms;

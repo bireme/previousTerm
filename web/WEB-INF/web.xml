@@ -8,7 +8,7 @@
             <param-name>LUCENE_INDEXES</param-name>
             <param-value>
                 <!--[name="<index name>" path="<index path>"]-->
-                [name="lil" path="/home/heitor/sbt-projects/lilacs_Sas"]
+                [name="lil" path="/home/javaapps/sbt-projects/DeCSHighlighter/decs/decs"]
                 <!--[name="sms" path="/home/heitor/tmp/index/"]-->
             </param-value>
         </init-param>
