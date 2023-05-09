@@ -4,15 +4,15 @@ ThisBuild / scalaVersion := "2.13.10"
 
 lazy val root = (project in file("."))
   .settings(
-    name := "MyServlet"
+    name := "previousTerm"
   )
 
 val jakartaServletApiVersion = "6.0.0"
 val jettyVersion = "11.0.13"
 
-val jacksonVersion = "2.14.2"
+val jacksonVersion = "2.15.0" //"2.14.2"
 val jsonSimpleVersion = "1.1.1"
-val log4jVersion = "2.19.0"
+val log4jVersion = "2.20.0" //"2.19.0"
 val luceneVersion = "9.5.0"
 
 libraryDependencies ++= Seq(
@@ -28,6 +28,14 @@ libraryDependencies ++= Seq(
 
 libraryDependencies += "jakarta.servlet" % "jakarta.servlet-api" % jakartaServletApiVersion
 
-Jetty / containerLibs := Seq("org.eclipse.jetty" % "jetty-runner" % jettyVersion)
+//Jetty / containerLibs := Seq("org.eclipse.jetty" % "jetty-runner" % jettyVersion)
 
 enablePlugins(JettyPlugin)
+
+assembly / assemblyMergeStrategy := {
+  case "module-info.class" => MergeStrategy.first //MergeStrategy.discard
+  case x =>
+    val oldStrategy = (assembly / assemblyMergeStrategy).value
+    oldStrategy(x)
+}
+

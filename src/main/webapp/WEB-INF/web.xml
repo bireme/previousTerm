@@ -8,7 +8,7 @@
             <param-name>LUCENE_INDEXES</param-name>
             <param-value>
                 <!--[name="<index name>" path="<index path>"]-->
-                [name="lil" path="lilacs/lilacs"]
+                [name="lil" path="../lilacs/lilacs"]
                 <!--[name="sms" path="/home/heitor/tmp/index/"]-->
             </param-value>
         </init-param>
@@ -23,10 +23,6 @@
         <servlet-name>PreviousTermServlet</servlet-name>
         <url-pattern>/PreviousTermServlet</url-pattern>
     </servlet-mapping>
-
-
-
-
 
     <session-config>
         <session-timeout>
