@@ -32,10 +32,18 @@ libraryDependencies += "jakarta.servlet" % "jakarta.servlet-api" % jakartaServle
 
 enablePlugins(JettyPlugin)
 
+/*
 assembly / assemblyMergeStrategy := {
   case "module-info.class" => MergeStrategy.first //MergeStrategy.discard
   case x =>
     val oldStrategy = (assembly / assemblyMergeStrategy).value
     oldStrategy(x)
+}
+*/
+
+assembly / assemblyMergeStrategy  := {
+  case PathList("META-INF", "services", xs @ _*) => MergeStrategy.concat
+  case PathList("META-INF", xs @ _*) => MergeStrategy.discard
+  case _ => MergeStrategy.first
 }
 
