@@ -8,12 +8,12 @@ lazy val root = (project in file("."))
   )
 
 val jakartaServletApiVersion = "6.0.0"
-val jettyVersion = "11.0.13"
+//val jettyVersion = "11.0.13"
 
 val jacksonVersion = "2.15.0" //"2.14.2"
 val jsonSimpleVersion = "1.1.1"
 val log4jVersion = "2.20.0" //"2.19.0"
-val luceneVersion = "9.5.0"
+val luceneVersion = "9.6.0"
 
 libraryDependencies ++= Seq(
   "com.fasterxml.jackson.core" % "jackson-core" % jacksonVersion,
